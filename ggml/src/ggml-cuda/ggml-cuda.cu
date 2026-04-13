@@ -2457,7 +2457,7 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
     ggml_cuda_pool_alloc<char> src0_cached_alloc(ctx.pool());
     ggml_tensor src0_cached;
     ggml_tensor * src0_orig = dst->src[0];
-    if (ctx.expert_cache && src0->buffer && ggml_backend_buft_is_host(src0->buffer->buft)) {
+    if (ctx.expert_cache && src0->buffer && (ggml_backend_buft_is_host(src0->buffer->buft) || strstr(ggml_backend_buft_name(src0->buffer->buft), "Host"))) {
         cudaStream_t cache_stream = ctx.stream();
 
         // read ids to find which experts are needed
