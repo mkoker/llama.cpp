@@ -300,3 +300,4 @@ static __device__ __forceinline__ unsigned int __vcmpne4(unsigned int a, unsigne
     }
     return c;
 }
+#define cudaMemcpyDefault hipMemcpyDefault

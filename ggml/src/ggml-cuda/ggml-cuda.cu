@@ -2504,7 +2504,7 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
                 CUDA_CHECK(cudaMemcpyAsync(
                     (char *)ctx.expert_cache->staging_buf + eid * nb02,
                     cached, nb02,
-                    cudaMemcpyDeviceToDevice, cache_stream));
+                    cudaMemcpyDefault, cache_stream));
             }
 
             src0_cached = *src0;

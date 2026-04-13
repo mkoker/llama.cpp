@@ -201,7 +201,7 @@ void * ggml_expert_cache_get(
     if (part_id < 0) {
         // no partition available — do direct H2D to a temp slot (slot 0 as fallback)
         // this should be rare
-        CUDA_CHECK(cudaMemcpyAsync(cache->slots[0].data, src_data, expert_size, cudaMemcpyHostToDevice, stream));
+        CUDA_CHECK(cudaMemcpyAsync(cache->slots[0].data, src_data, expert_size, cudaMemcpyDefault, stream));
         return cache->slots[0].data;
     }
 
@@ -223,7 +223,7 @@ void * ggml_expert_cache_get(
     lru_push_front(cache, victim);
 
     // H2D copy
-    CUDA_CHECK(cudaMemcpyAsync(slot.data, src_data, expert_size, cudaMemcpyHostToDevice, stream));
+    CUDA_CHECK(cudaMemcpyAsync(slot.data, src_data, expert_size, cudaMemcpyDefault, stream));
 
     slot.tensor_ptr = tensor_ptr;
     slot.expert_idx = expert_idx;
