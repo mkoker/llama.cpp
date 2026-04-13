@@ -74,6 +74,21 @@ ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_
     cache->staging_buf  = nullptr;
     cache->staging_size = 0;
 
+    // allocate staging from cache budget: staging = slot_size * 128 (one full expert tensor)
+    size_t staging_want = slot_size_bytes * 128;
+    if (staging_want > pool_bytes / 3) staging_want = pool_bytes / 3; // cap at 1/3 of budget
+    {
+        cudaError_t se = cudaMalloc(&cache->staging_buf, staging_want);
+        if (se == cudaSuccess) {
+            cache->staging_size = staging_want;
+        } else {
+            cudaGetLastError();
+            cache->staging_buf = nullptr;
+            cache->staging_size = 0;
+        }
+    }
+
+
     cache->slots = new ggml_expert_cache_slot[n_slots];
 
     for (int i = 0; i < n_slots; i++) {
