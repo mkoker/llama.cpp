@@ -617,6 +617,26 @@ void ggml_backend_cuda_set_expert_cache(ggml_backend_t backend, size_t size_mib,
     }
 }
 
+void ggml_backend_cuda_alloc_expert_staging(ggml_backend_t backend, size_t size_bytes) {
+    ggml_backend_cuda_context * ctx = (ggml_backend_cuda_context *)backend->context;
+    if (!ctx->expert_cache || ctx->expert_cache->staging_buf) return;
+    ggml_cuda_set_device(ctx->device);
+    size_t free_mem = 0, total_mem = 0;
+    cudaMemGetInfo(&free_mem, &total_mem);
+    if (free_mem < size_bytes + 256*1024*1024) {
+        size_bytes = free_mem > 256*1024*1024 ? free_mem - 256*1024*1024 : 0;
+    }
+    if (size_bytes == 0) return;
+    cudaError_t err = cudaMalloc(&ctx->expert_cache->staging_buf, size_bytes);
+    if (err == cudaSuccess) {
+        ctx->expert_cache->staging_size = size_bytes;
+        GGML_LOG_INFO("expert-cache: staging buffer %.0f MiB\n", size_bytes/(1024.0*1024.0));
+    } else {
+        cudaGetLastError();
+        GGML_LOG_WARN("expert-cache: staging alloc failed (%.0f MiB, %.0f MiB free)\n", size_bytes/(1024.0*1024.0), free_mem/(1024.0*1024.0));
+    }
+}
+
 
 // Copy expert slices using persistent GPU cache to avoid redundant H2D transfers
 // Returns true if cache handled the copy, false to fall back to normal copy
@@ -2453,52 +2473,46 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
 
     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
 
-    // Expert cache: if src0 is on host and cache is available, build GPU copy
-    ggml_cuda_pool_alloc<char> src0_cached_alloc(ctx.pool());
+    // Expert cache: if src0 is on host memory, build GPU copy via staging buffer
     ggml_tensor src0_cached;
     ggml_tensor * src0_orig = dst->src[0];
-    if (ctx.expert_cache && src0->buffer && (ggml_backend_buft_is_host(src0->buffer->buft) || strstr(ggml_backend_buft_name(src0->buffer->buft), "Host"))) {
-        cudaStream_t cache_stream = ctx.stream();
+    if (ctx.expert_cache && ctx.expert_cache->staging_buf && src0->buffer &&
+        (ggml_backend_buft_is_host(src0->buffer->buft) || strstr(ggml_backend_buft_name(src0->buffer->buft), "Host"))) {
 
-        // read ids to find which experts are needed
-        std::vector<char> ids_host_cache(ggml_nbytes(ids));
-        CUDA_CHECK(cudaMemcpyAsync(ids_host_cache.data(), ids->data, ggml_nbytes(ids), cudaMemcpyDeviceToHost, cache_stream));
-        CUDA_CHECK(cudaStreamSynchronize(cache_stream));
-
-        std::vector<bool> expert_needed(ne02, false);
-        const int64_t n_expert_used_cache = ids->ne[0];
-        const int64_t n_tokens_cache = ids->ne[1];
-        for (int64_t t = 0; t < n_tokens_cache; t++) {
-            for (int64_t e = 0; e < n_expert_used_cache; e++) {
-                int32_t eid = *(const int32_t *)(ids_host_cache.data() + t * ids->nb[1] + e * ids->nb[0]);
-                if (eid >= 0 && eid < ne02) expert_needed[eid] = true;
-            }
-        }
-
-        // allocate GPU buffer for full src0 layout (only populate needed slices)
         size_t src0_total = ggml_nbytes(src0);
-        src0_cached_alloc.alloc(src0_total);
+        if (src0_total <= ctx.expert_cache->staging_size) {
+            cudaStream_t cache_stream = ctx.stream();
 
-        // for each needed expert, get from cache (H2D on miss) and copy to correct offset
-        for (int64_t eid = 0; eid < ne02; eid++) {
-            if (!expert_needed[eid]) continue;
-            const void * cpu_ptr = (const char *)src0->data + eid * nb02;
-            void * cached = ggml_expert_cache_get(
-                ctx.expert_cache, src0->data, eid, cpu_ptr, nb02, cache_stream);
-            // D2D from cache slot to contiguous buffer at correct offset
-            CUDA_CHECK(cudaMemcpyAsync(
-                (char *)src0_cached_alloc.ptr + eid * nb02,
-                cached, nb02,
-                cudaMemcpyDeviceToDevice, cache_stream));
+            std::vector<char> ids_host_cache(ggml_nbytes(ids));
+            CUDA_CHECK(cudaMemcpyAsync(ids_host_cache.data(), ids->data, ggml_nbytes(ids),
+                cudaMemcpyDeviceToHost, cache_stream));
+            CUDA_CHECK(cudaStreamSynchronize(cache_stream));
+
+            std::vector<bool> expert_needed(ne02, false);
+            for (int64_t t = 0; t < ids->ne[1]; t++) {
+                for (int64_t e = 0; e < ids->ne[0]; e++) {
+                    int32_t eid = *(const int32_t *)(ids_host_cache.data() + t * ids->nb[1] + e * ids->nb[0]);
+                    if (eid >= 0 && eid < ne02) expert_needed[eid] = true;
+                }
+            }
+
+            for (int64_t eid = 0; eid < ne02; eid++) {
+                if (!expert_needed[eid]) continue;
+                const void * cpu_ptr = (const char *)src0->data + eid * nb02;
+                void * cached = ggml_expert_cache_get(
+                    ctx.expert_cache, src0->data, eid, cpu_ptr, nb02, cache_stream);
+                CUDA_CHECK(cudaMemcpyAsync(
+                    (char *)ctx.expert_cache->staging_buf + eid * nb02,
+                    cached, nb02,
+                    cudaMemcpyDeviceToDevice, cache_stream));
+            }
+
+            src0_cached = *src0;
+            src0_cached.data = ctx.expert_cache->staging_buf;
+            src0_cached.buffer = dst->buffer;
+            dst->src[0] = &src0_cached;
+            src0 = &src0_cached;
         }
-        CUDA_CHECK(cudaStreamSynchronize(cache_stream));
-
-        // redirect src0 to GPU copy
-        src0_cached = *src0;
-        src0_cached.data = src0_cached_alloc.ptr;
-        src0_cached.buffer = dst->buffer; // GPU buffer
-        dst->src[0] = &src0_cached;
-        src0 = &src0_cached;
     }
 
 
@@ -5343,6 +5357,9 @@ static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, con
     }
     if (strcmp(name, "ggml_backend_cuda_expert_cache_copy") == 0) {
         return (void *)ggml_backend_cuda_expert_cache_copy;
+    }
+    if (strcmp(name, "ggml_backend_cuda_alloc_expert_staging") == 0) {
+        return (void *)ggml_backend_cuda_alloc_expert_staging;
     }
     return nullptr;
 }

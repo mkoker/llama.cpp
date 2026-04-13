@@ -71,6 +71,8 @@ ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_
     cache->lru_tail   = n_slots - 1;
     cache->hits       = 0;
     cache->misses     = 0;
+    cache->staging_buf  = nullptr;
+    cache->staging_size = 0;
 
     cache->slots = new ggml_expert_cache_slot[n_slots];
 
@@ -100,6 +102,7 @@ void ggml_expert_cache_free(ggml_expert_cache * cache) {
     GGML_LOG_INFO("%s: expert cache stats - hits: %" PRId64 ", misses: %" PRId64 ", hit rate: %.1f%%\n",
                   __func__, cache->hits, cache->misses, hit_rate);
 
+    if (cache->staging_buf) { CUDA_CHECK(cudaFree(cache->staging_buf)); }
     CUDA_CHECK(cudaFree(cache->pool));
     delete[] cache->slots;
     delete cache;

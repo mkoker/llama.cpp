@@ -673,6 +673,36 @@ void llama_context::sched_reserve() {
     LLAMA_LOG_INFO("%s: reserve took %.2f ms, sched copies = %d\n",
             __func__, (t_end_us - t_start_us)/1000.0, ggml_backend_sched_get_n_copies(sched.get()));
 
+    // allocate expert staging buffer from remaining VRAM (must be after sched_reserve)
+    if (cparams.expert_cache_size > 0) {
+        size_t staging_size = 0;
+        for (const auto & layer : model.layers) {
+            const struct ggml_tensor * exps[] = {
+                layer.ffn_gate_exps, layer.ffn_down_exps, layer.ffn_up_exps, layer.ffn_gate_up_exps,
+            };
+            for (const auto * t : exps) {
+                if (t && ggml_n_dims(t) >= 3) {
+                    size_t sz = ggml_nbytes(t);
+                    if (sz > staging_size) staging_size = sz;
+                }
+            }
+        }
+        if (staging_size > 0) {
+            for (const auto & backend : backends) {
+                auto * dev = ggml_backend_get_device(backend.get());
+                if (!dev) continue;
+                auto * reg = ggml_backend_dev_backend_reg(dev);
+                if (!reg) continue;
+                using fn_t = void (*)(ggml_backend_t, size_t);
+                auto * fn = (fn_t)ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_alloc_expert_staging");
+                if (fn) {
+                    fn(backend.get(), staging_size);
+                    break;
+                }
+            }
+        }
+    }
+
     // initialize expert cache for MoE CPU offload
 }
 

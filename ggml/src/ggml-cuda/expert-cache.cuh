@@ -49,6 +49,9 @@ struct ggml_expert_cache {
 
     int64_t hits;
     int64_t misses;
+
+    void *  staging_buf;
+    size_t  staging_size;
 };
 
 ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_size_bytes, int device);
