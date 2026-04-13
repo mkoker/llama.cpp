@@ -54,7 +54,13 @@ ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_
     ggml_cuda_set_device(device);
 
     void * pool = nullptr;
-    CUDA_CHECK(cudaMalloc(&pool, pool_bytes));
+    cudaError_t err = cudaMalloc(&pool, pool_bytes);
+    if (err != cudaSuccess) {
+        GGML_LOG_WARN("%s: expert cache allocation failed (%.1f MiB), cache disabled\n", __func__, (double)pool_bytes / (1024.0 * 1024.0));
+        cudaGetLastError(); // clear error
+        
+        return nullptr;
+    }
 
     ggml_expert_cache * cache = new ggml_expert_cache();
     cache->pool       = pool;

@@ -347,6 +347,50 @@ llama_context::llama_context(
             LLAMA_LOG_INFO("%s: pipeline parallelism enabled\n", __func__);
         }
 
+
+    // initialize expert cache BEFORE sched_reserve to claim VRAM first
+    if (cparams.expert_cache_size > 0) {
+        // compute max expert slice size from model layers
+        size_t max_expert_bytes = 0;
+        for (const auto & layer : model.layers) {
+            const struct ggml_tensor * exps[] = {
+                layer.ffn_gate_exps, layer.ffn_down_exps, layer.ffn_up_exps, layer.ffn_gate_up_exps,
+            };
+            for (const auto * t : exps) {
+                if (t && ggml_n_dims(t) >= 3) {
+                    // nb[2] is the stride to the next expert = size of one expert slice
+                    size_t slice = t->nb[2];
+                    if (slice > max_expert_bytes) {
+                        max_expert_bytes = slice;
+                    }
+                }
+            }
+        }
+    
+        if (max_expert_bytes > 0) {
+            // try to find a CUDA backend and set the expert cache via proc address
+            for (const auto & backend : backends) {
+                auto * dev = ggml_backend_get_device(backend.get());
+                if (!dev) continue;
+                auto * reg = ggml_backend_dev_backend_reg(dev);
+                if (!reg) continue;
+    
+                using set_expert_cache_fn_t = void (*)(ggml_backend_t, size_t, size_t);
+                auto * fn = (set_expert_cache_fn_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_set_expert_cache");
+                if (fn) {
+                    fn(backend.get(), cparams.expert_cache_size, max_expert_bytes);
+                    size_t n_slots = (cparams.expert_cache_size * 1024 * 1024) / max_expert_bytes;
+                    LLAMA_LOG_INFO("%s: expert cache: %zu MiB, slot size %.1f MiB, %zu slots\n",
+                            __func__, cparams.expert_cache_size,
+                            max_expert_bytes / (1024.0 * 1024.0), n_slots);
+                    break; // only set on first CUDA backend
+                }
+            }
+        } else {
+            LLAMA_LOG_WARN("%s: --expert-cache-size specified but no expert tensors found in model\n", __func__);
+        }
+    }
+
         sched_reserve();
 
         if (!cparams.flash_attn) {
@@ -630,47 +674,6 @@ void llama_context::sched_reserve() {
             __func__, (t_end_us - t_start_us)/1000.0, ggml_backend_sched_get_n_copies(sched.get()));
 
     // initialize expert cache for MoE CPU offload
-    if (cparams.expert_cache_size > 0) {
-        // compute max expert slice size from model layers
-        size_t max_expert_bytes = 0;
-        for (const auto & layer : model.layers) {
-            const struct ggml_tensor * exps[] = {
-                layer.ffn_gate_exps, layer.ffn_down_exps, layer.ffn_up_exps, layer.ffn_gate_up_exps,
-            };
-            for (const auto * t : exps) {
-                if (t && ggml_n_dims(t) >= 3) {
-                    // nb[2] is the stride to the next expert = size of one expert slice
-                    size_t slice = t->nb[2];
-                    if (slice > max_expert_bytes) {
-                        max_expert_bytes = slice;
-                    }
-                }
-            }
-        }
-
-        if (max_expert_bytes > 0) {
-            // try to find a CUDA backend and set the expert cache via proc address
-            for (const auto & backend : backends) {
-                auto * dev = ggml_backend_get_device(backend.get());
-                if (!dev) continue;
-                auto * reg = ggml_backend_dev_backend_reg(dev);
-                if (!reg) continue;
-
-                using set_expert_cache_fn_t = void (*)(ggml_backend_t, size_t, size_t);
-                auto * fn = (set_expert_cache_fn_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_set_expert_cache");
-                if (fn) {
-                    fn(backend.get(), cparams.expert_cache_size, max_expert_bytes);
-                    size_t n_slots = (cparams.expert_cache_size * 1024 * 1024) / max_expert_bytes;
-                    LLAMA_LOG_INFO("%s: expert cache: %zu MiB, slot size %.1f MiB, %zu slots\n",
-                            __func__, cparams.expert_cache_size,
-                            max_expert_bytes / (1024.0 * 1024.0), n_slots);
-                    break; // only set on first CUDA backend
-                }
-            }
-        } else {
-            LLAMA_LOG_WARN("%s: --expert-cache-size specified but no expert tensors found in model\n", __func__);
-        }
-    }
 }
 
 void llama_context::synchronize() {
