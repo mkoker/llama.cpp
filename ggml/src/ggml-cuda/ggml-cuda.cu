@@ -668,7 +668,7 @@ static bool ggml_backend_cuda_expert_cache_copy(
             cudaMemcpyDeviceToDevice, stream));
     }
     
-    // sync handled by scheduler
+    CUDA_CHECK(cudaStreamSynchronize(stream));
     return true;
 }
 
@@ -2508,6 +2508,7 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
             }
 
             src0_cached = *src0;
+            CUDA_CHECK(cudaStreamSynchronize(cache_stream));
             src0_cached.data = ctx.expert_cache->staging_buf;
             src0_cached.buffer = dst->buffer;
             dst->src[0] = &src0_cached;
@@ -2574,7 +2575,7 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
 
     std::vector<char> ids_host(ggml_nbytes(ids));
     CUDA_CHECK(cudaMemcpyAsync(ids_host.data(), ids->data, ggml_nbytes(ids), cudaMemcpyDeviceToHost, stream));
-    // sync handled by scheduler
+    CUDA_CHECK(cudaStreamSynchronize(stream));
 
     for (int64_t i02 = 0; i02 < ne02; ++i02) { // expert matrices
         for (int64_t i12 = 0; i12 < ne12; ++i12) { // tokens
@@ -2595,7 +2596,7 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
     ids_to_sorted_host.insert(ids_to_sorted_host.end(), ids_from_sorted_host.begin(), ids_from_sorted_host.end());
 
     CUDA_CHECK(cudaMemcpyAsync(ids_buf_dev.ptr, ids_to_sorted_host.data(), 2*ne_get_rows*sizeof(int32_t), cudaMemcpyHostToDevice, stream));
-    // sync handled by scheduler
+    CUDA_CHECK(cudaStreamSynchronize(stream));
 
     const int32_t * ids_to_sorted   = ids_buf_dev.ptr + 0*ne_get_rows;
     const int32_t * ids_from_sorted = ids_buf_dev.ptr + 1*ne_get_rows;
