@@ -332,6 +332,7 @@ struct cmd_params {
     std::vector<int>                 poll;
     std::vector<int>                 n_gpu_layers;
     std::vector<int>                 n_cpu_moe;
+    std::vector<int>                 expert_cache_size;
     std::vector<llama_split_mode>    split_mode;
     std::vector<int>                 main_gpu;
     std::vector<bool>                no_kv_offload;
@@ -376,6 +377,7 @@ static const cmd_params cmd_params_defaults = {
     /* poll                 */ { 50 },
     /* n_gpu_layers         */ { 99 },
     /* n_cpu_moe            */ { 0 },
+    /* expert_cache_size    */ { 0 },
     /* split_mode           */ { LLAMA_SPLIT_MODE_LAYER },
     /* main_gpu             */ { 0 },
     /* no_kv_offload        */ { false },
@@ -446,6 +448,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  --poll <0...100>                            (default: %s)\n", join(cmd_params_defaults.poll, ",").c_str());
     printf("  -ngl, --n-gpu-layers <n>                    (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
     printf("  -ncmoe, --n-cpu-moe <n>                     (default: %s)\n", join(cmd_params_defaults.n_cpu_moe, ",").c_str());
+    printf("  --expert-cache-size <n>                      (default: %s)\n", join(cmd_params_defaults.expert_cache_size, ",").c_str());
     printf("  -sm, --split-mode <none|layer|row|tensor>   (default: %s)\n", join(transform_to_str(cmd_params_defaults.split_mode, split_mode_str), ",").c_str());
     printf("  -mg, --main-gpu <i>                         (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -nkvo, --no-kv-offload <0|1>                (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
@@ -717,6 +720,13 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 }
                 auto p = parse_int_range(argv[i]);
                 params.n_cpu_moe.insert(params.n_cpu_moe.end(), p.begin(), p.end());
+            } else if (arg == "--expert-cache-size") {
+                if (++i >= argc) {
+                    invalid_param = true;
+                    break;
+                }
+                auto p = string_split<int>(argv[i], split_delim);
+                params.expert_cache_size.insert(params.expert_cache_size.end(), p.begin(), p.end());
             } else if (llama_supports_rpc() && (arg == "-rpc" || arg == "--rpc")) {
                 if (++i >= argc) {
                     invalid_param = true;
@@ -1060,6 +1070,9 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.n_cpu_moe.empty()) {
         params.n_cpu_moe = cmd_params_defaults.n_cpu_moe;
     }
+    if (params.expert_cache_size.empty()) {
+        params.expert_cache_size = cmd_params_defaults.expert_cache_size;
+    }
     if (params.split_mode.empty()) {
         params.split_mode = cmd_params_defaults.split_mode;
     }
@@ -1133,6 +1146,7 @@ struct cmd_params_instance {
     int                poll;
     int                n_gpu_layers;
     int                n_cpu_moe;
+    int                expert_cache_size;
     llama_split_mode   split_mode;
     int                main_gpu;
     bool               no_kv_offload;
@@ -1202,7 +1216,7 @@ struct cmd_params_instance {
     }
 
     bool equal_mparams(const cmd_params_instance & other) const {
-        return model == other.model && n_gpu_layers == other.n_gpu_layers && n_cpu_moe == other.n_cpu_moe &&
+        return model == other.model && n_gpu_layers == other.n_gpu_layers && n_cpu_moe == other.n_cpu_moe && expert_cache_size == other.expert_cache_size &&
                split_mode == other.split_mode &&
                main_gpu == other.main_gpu && tensor_split == other.tensor_split &&
                use_mmap == other.use_mmap && use_direct_io == other.use_direct_io &&
@@ -1224,6 +1238,7 @@ struct cmd_params_instance {
         cparams.embeddings      = embeddings;
         cparams.op_offload      = !no_op_offload;
         cparams.swa_full        = false;
+        cparams.expert_cache_size = (size_t)expert_cache_size;
 
         return cparams;
     }
@@ -1239,6 +1254,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & fpc : params.fit_params_min_ctx)
     for (const auto & nl : params.n_gpu_layers)
     for (const auto & ncmoe : params.n_cpu_moe)
+    for (const auto & ecs : params.expert_cache_size)
     for (const auto & sm : params.split_mode)
     for (const auto & mg : params.main_gpu)
     for (const auto & devs : params.devices)
@@ -1279,6 +1295,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .poll         = */ pl,
                 /* .n_gpu_layers = */ nl,
                 /* .n_cpu_moe    = */ ncmoe,
+                /* .expert_cache_size = */ ecs,
                 /* .split_mode   = */ sm,
                 /* .main_gpu     = */ mg,
                 /* .no_kv_offload= */ nkvo,
@@ -1316,6 +1333,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .poll         = */ pl,
                 /* .n_gpu_layers = */ nl,
                 /* .n_cpu_moe    = */ ncmoe,
+                /* .expert_cache_size = */ ecs,
                 /* .split_mode   = */ sm,
                 /* .main_gpu     = */ mg,
                 /* .no_kv_offload= */ nkvo,
@@ -1353,6 +1371,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .poll         = */ pl,
                 /* .n_gpu_layers = */ nl,
                 /* .n_cpu_moe    = */ ncmoe,
+                /* .expert_cache_size = */ ecs,
                 /* .split_mode   = */ sm,
                 /* .main_gpu     = */ mg,
                 /* .no_kv_offload= */ nkvo,
@@ -1395,6 +1414,7 @@ struct test {
     ggml_type                type_v;
     int                      n_gpu_layers;
     int                      n_cpu_moe;
+    int                      expert_cache_size;
     llama_split_mode         split_mode;
     int                      main_gpu;
     bool                     no_kv_offload;
@@ -1435,6 +1455,7 @@ struct test {
         type_v         = inst.type_v;
         n_gpu_layers   = inst.n_gpu_layers;
         n_cpu_moe      = inst.n_cpu_moe;
+        expert_cache_size = inst.expert_cache_size;
         split_mode     = inst.split_mode;
         main_gpu       = inst.main_gpu;
         no_kv_offload  = inst.no_kv_offload;

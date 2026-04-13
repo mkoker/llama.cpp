@@ -2311,6 +2311,16 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_N_CPU_MOE"));
     add_opt(common_arg(
+        {"--expert-cache-size"}, "N",
+        "VRAM budget in MiB for expert weight cache when using CPU MoE offload (default: 0 = disabled)",
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.expert_cache_size = (size_t)value;
+        }
+    ).set_env("LLAMA_ARG_EXPERT_CACHE_SIZE"));
+    add_opt(common_arg(
         {"-cmoed", "--cpu-moe-draft"},
         "keep all Mixture of Experts (MoE) weights in the CPU for the draft model",
         [](common_params & params) {

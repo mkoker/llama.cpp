@@ -605,6 +605,18 @@ ggml_backend_cuda_context::~ggml_backend_cuda_context() {
     }
 }
 
+void ggml_backend_cuda_set_expert_cache(ggml_backend_t backend, size_t size_mib, size_t slot_size_bytes) {
+    ggml_backend_cuda_context * ctx = (ggml_backend_cuda_context *) backend->context;
+    if (ctx->expert_cache) {
+        ggml_expert_cache_free(ctx->expert_cache);
+        ctx->expert_cache = nullptr;
+    }
+    if (size_mib > 0 && slot_size_bytes > 0) {
+        size_t total_bytes = size_mib * 1024 * 1024;
+        ctx->expert_cache = ggml_expert_cache_init(total_bytes, slot_size_bytes, ctx->device);
+    }
+}
+
 // cuda buffer
 
 struct ggml_backend_cuda_buffer_context {
@@ -5319,6 +5331,9 @@ static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, con
     }
     if (strcmp(name, "ggml_backend_get_features") == 0) {
         return (void *)ggml_backend_cuda_get_features;
+    }
+    if (strcmp(name, "ggml_backend_cuda_set_expert_cache") == 0) {
+        return (void *)ggml_backend_cuda_set_expert_cache;
     }
     return nullptr;
 }

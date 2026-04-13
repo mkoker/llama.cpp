@@ -45,6 +45,9 @@ GGML_BACKEND_API void ggml_backend_cuda_unregister_host_buffer(void * buffer);
 
 GGML_BACKEND_API ggml_backend_reg_t ggml_backend_cuda_reg(void);
 
+// expert cache for MoE CPU offload
+GGML_BACKEND_API void ggml_backend_cuda_set_expert_cache(ggml_backend_t backend, size_t size_mib, size_t slot_size_bytes);
+
 #ifdef  __cplusplus
 }
 #endif

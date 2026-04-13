@@ -42,6 +42,8 @@ struct llama_cparams {
 
     enum llama_pooling_type pooling_type;
 
+    size_t expert_cache_size; // VRAM budget in MiB for expert weight cache (0 = disabled)
+
     ggml_backend_sched_eval_callback cb_eval;
     void * cb_eval_user_data;
 };
