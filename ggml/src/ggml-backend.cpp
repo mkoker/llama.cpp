@@ -1566,17 +1566,21 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                     ggml_backend_synchronize(split_backend);
                 }
 
-                // when offloading MoE weights, we can reduce the amount of data copied by copying only the experts that are used
-                ggml_tensor * node = split->graph.nodes[0];
-                if (split->graph.n_nodes > 0 &&
-                    ggml_backend_buffer_get_usage(input->buffer) == GGML_BACKEND_BUFFER_USAGE_WEIGHTS &&
-                    ggml_backend_buffer_is_host(input->buffer) && (
-                    (node->src[0] == input_cpy && node->op == GGML_OP_MUL_MAT_ID)
-                    //|| (node->src[1] == input_cpy && node->op == GGML_OP_ADD_ID) /* GGML_OP_ADD_ID weights are small and not worth splitting */
-                    )) {
-
-                    const int64_t n_expert   = node->op == GGML_OP_MUL_MAT_ID ? input->ne[2] : input->ne[1];
-                    const size_t expert_size = node->op == GGML_OP_MUL_MAT_ID ? input->nb[2] : input->nb[1];
+                // when offloading MoE weights, copy only the experts that are used
+                // scan all nodes for MUL_MAT_ID using this tensor as src[0]
+                ggml_tensor * node = nullptr;
+                if (split->graph.n_nodes > 0 && ggml_backend_buffer_is_host(input->buffer)) {
+                    for (int ni = 0; ni < split->graph.n_nodes; ni++) {
+                        ggml_tensor * c = split->graph.nodes[ni];
+                        if (c->op == GGML_OP_MUL_MAT_ID && c->src[0] == input_cpy) {
+                            node = c;
+                            break;
+                        }
+                    }
+                }
+                if (node) {
+                    const int64_t n_expert   = input->ne[2];
+                    const size_t expert_size = input->nb[2];
 
                     ggml_backend_synchronize(input_backend);
 
