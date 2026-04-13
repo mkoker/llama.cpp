@@ -20,6 +20,7 @@
 #include "ggml-cuda/cpy.cuh"
 #include "ggml-cuda/cross-entropy-loss.cuh"
 #include "ggml-cuda/cumsum.cuh"
+#include "ggml-cuda/expert-cache.cuh"
 #include "ggml-cuda/diagmask.cuh"
 #include "ggml-cuda/diag.cuh"
 #include "ggml-cuda/fattn.cuh"
@@ -598,8 +599,11 @@ ggml_backend_cuda_context::~ggml_backend_cuda_context() {
             CUBLAS_CHECK(cublasDestroy(cublas_handles[i]));
         }
     }
+    if (expert_cache != nullptr) {
+        ggml_expert_cache_free(expert_cache);
+        expert_cache = nullptr;
+    }
 }
-
 
 // cuda buffer
 

@@ -1349,6 +1349,8 @@ struct ggml_cuda_stream_context {
     }
 };
 
+struct ggml_expert_cache;
+
 struct ggml_backend_cuda_context {
     int device;
     std::string name;
@@ -1401,6 +1403,8 @@ struct ggml_backend_cuda_context {
     }
 
     ggml_cuda_stream_context concurrent_stream_context;
+
+    ggml_expert_cache * expert_cache = nullptr;
 
     ~ggml_backend_cuda_context();
 

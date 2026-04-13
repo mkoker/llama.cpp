@@ -1,4 +1,5 @@
 #include "expert-cache.cuh"
+#include <cinttypes>
 
 // ── LRU helpers (caller must hold cache->mtx) ──────────────────────────
 
@@ -90,7 +91,7 @@ void ggml_expert_cache_free(ggml_expert_cache * cache) {
     int64_t total = cache->hits + cache->misses;
     double hit_rate = total > 0 ? 100.0 * (double)cache->hits / (double)total : 0.0;
 
-    GGML_LOG_INFO("%s: expert cache stats — hits: %" PRId64 ", misses: %" PRId64 ", hit rate: %.1f%%\n",
+    GGML_LOG_INFO("%s: expert cache stats - hits: %" PRId64 ", misses: %" PRId64 ", hit rate: %.1f%%\n",
                   __func__, cache->hits, cache->misses, hit_rate);
 
     CUDA_CHECK(cudaFree(cache->pool));
