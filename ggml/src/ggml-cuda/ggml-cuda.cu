@@ -617,6 +617,41 @@ void ggml_backend_cuda_set_expert_cache(ggml_backend_t backend, size_t size_mib,
     }
 }
 
+
+// Copy expert slices using persistent GPU cache to avoid redundant H2D transfers
+// Returns true if cache handled the copy, false to fall back to normal copy
+static bool ggml_backend_cuda_expert_cache_copy(
+    ggml_backend_t backend,
+    ggml_tensor * input_cpy,      // GPU destination tensor
+    const void * input_data,      // CPU source data pointer (full expert tensor)
+    int64_t n_expert,             // number of experts
+    size_t expert_size,           // bytes per expert slice
+    const ggml_bitset_t * used,   // bitset of which experts are needed
+    size_t used_size) {           // size of used bitset in elements
+    
+    ggml_backend_cuda_context * ctx = (ggml_backend_cuda_context *)backend->context;
+    if (!ctx->expert_cache) return false;
+    
+    cudaStream_t stream = ctx->stream();
+    
+    for (int64_t id = 0; id < n_expert; id++) {
+        if (!ggml_bitset_get(used, id)) continue;
+        
+        const void * cpu_ptr = (const char *)input_data + id * expert_size;
+        void * cached = ggml_expert_cache_get(
+            ctx->expert_cache, (void *)input_data, id, cpu_ptr, expert_size, stream);
+        
+        // D2D copy from persistent cache slot to input_cpy
+        CUDA_CHECK(cudaMemcpyAsync(
+            (char *)input_cpy->data + id * expert_size,
+            cached, expert_size,
+            cudaMemcpyDeviceToDevice, stream));
+    }
+    
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+    return true;
+}
+
 // cuda buffer
 
 struct ggml_backend_cuda_buffer_context {
@@ -5253,6 +5288,9 @@ static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, con
     }
     if (strcmp(name, "ggml_backend_cuda_set_expert_cache") == 0) {
         return (void *)ggml_backend_cuda_set_expert_cache;
+    }
+    if (strcmp(name, "ggml_backend_cuda_expert_cache_copy") == 0) {
+        return (void *)ggml_backend_cuda_expert_cache_copy;
     }
     return nullptr;
 }
