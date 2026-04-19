@@ -1275,9 +1275,13 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
                     if (src == NULL) {
                         continue;
                     }
-                    // check if a weight is on a different and incompatible backend
-                    // by starting a new split, the memory of the previously offloaded weights can be reused
-                    if (src->buffer != NULL && src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
+                    // check if weights (or MoE expert compute tensor for MUL_MAT_ID src[0])
+                    // are on a different and incompatible backend
+                    // by starting a new split, the memory of the previously offloaded tensors can be reused
+                    const bool is_split_tensor = src->buffer != NULL && (
+                        src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS ||
+                        (src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_COMPUTE && node->op == GGML_OP_MUL_MAT_ID && j == 0));
+                    if (is_split_tensor) {
                         int src_backend_id = tensor_backend_id(src);
                         if (src_backend_id != cur_backend_id && !ggml_backend_sched_buffer_supported(sched, src, cur_backend_id)) {
                             need_new_split = true;
