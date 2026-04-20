@@ -64,7 +64,7 @@ esac
 
 CACHE_ARGS=()
 if [[ "$CACHE" == "on" ]]; then
-  CACHE_ARGS+=(--expert-cache-size 16384)
+  CACHE_ARGS+=(--expert-cache-size 2048)
 fi
 
 COMMON_ARGS=(
