@@ -45,14 +45,17 @@ case "$TIER" in
   tier1)
     MODEL="/mnt/nvme/models/Qwen3-30B-A3B-Q4_K_M.gguf"
     NCMOE=8
+    NGL=99
     ;;
   tier2)
     MODEL="/mnt/nvme/MiniMax-M2.7/UD-IQ4_XS/MiniMax-M2.7-UD-IQ4_XS-00001-of-00004.gguf"
     NCMOE=8
+    NGL=10
     ;;
   tier3)
     MODEL="/mnt/nvme/models/qwen3-235b/Qwen3-235B-A22B-Q4_K_M-00001-of-00005.gguf"
     NCMOE=8
+    NGL=10
     ;;
   *)
     echo "Invalid tier: $TIER" >&2
@@ -69,7 +72,7 @@ fi
 
 COMMON_ARGS=(
   -m "$MODEL"
-  -ngl 99
+  -ngl "$NGL"
   -b 1
   -t 1
   -p "$PROMPT_TOKENS"
