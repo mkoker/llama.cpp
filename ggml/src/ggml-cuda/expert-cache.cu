@@ -121,7 +121,7 @@ void ggml_expert_cache_free(ggml_expert_cache * cache) {
     int64_t total = cache->hits + cache->misses;
     double hit_rate = total > 0 ? 100.0 * (double)cache->hits / (double)total : 0.0;
 
-    GGML_LOG_INFO("%s: expert cache stats - hits: %" PRId64 ", misses: %" PRId64 ", hit rate: %.1f%%, h2d_copies: %" PRId64 ", h2d_bytes: %" PRId64 ", d2d_copies: %" PRId64 ", d2d_bytes: %" PRId64 ", skipped_h2d_due_to_hit: %" PRId64 "\n",
+    GGML_LOG_WARN("%s: expert cache stats - hits: %" PRId64 ", misses: %" PRId64 ", hit rate: %.1f%%, h2d_copies: %" PRId64 ", h2d_bytes: %" PRId64 ", d2d_copies: %" PRId64 ", d2d_bytes: %" PRId64 ", skipped_h2d_due_to_hit: %" PRId64 "\n",
                   __func__, cache->hits, cache->misses, hit_rate,
                   cache->h2d_expert_copies, cache->h2d_bytes,
                   cache->d2d_expert_copies, cache->d2d_bytes,

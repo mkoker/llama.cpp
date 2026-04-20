@@ -675,9 +675,9 @@ static bool ggml_backend_cuda_expert_cache_copy(
 
     if (ctx->expert_cache->debug_enabled) {
         const int64_t total = ctx->expert_cache->hits + ctx->expert_cache->misses;
-        if (total > 0 && (total % 4096 == 0)) {
+        if (total > 0 && (total % 256 == 0)) {
             const double hit_rate = 100.0 * (double)ctx->expert_cache->hits / (double)total;
-            GGML_LOG_INFO("expert-cache: hits=%" PRId64 " misses=%" PRId64 " hit_rate=%.1f%% h2d=%" PRId64 "(%" PRId64 "B) d2d=%" PRId64 "(%" PRId64 "B) skipped_h2d=%" PRId64 "\n",
+            GGML_LOG_WARN("expert-cache: hits=%" PRId64 " misses=%" PRId64 " hit_rate=%.1f%% h2d=%" PRId64 "(%" PRId64 "B) d2d=%" PRId64 "(%" PRId64 "B) skipped_h2d=%" PRId64 "\n",
                 ctx->expert_cache->hits,
                 ctx->expert_cache->misses,
                 hit_rate,
