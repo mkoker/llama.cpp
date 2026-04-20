@@ -70,7 +70,13 @@ if [[ "$CACHE" == "on" ]]; then
   CACHE_ARGS+=(--expert-cache-size 2048)
 fi
 
+VERBOSE_ARGS=()
+if [[ -n "${GGML_EXPERT_CACHE_DEBUG:-}" ]]; then
+  VERBOSE_ARGS+=(-v)
+fi
+
 COMMON_ARGS=(
+  "${VERBOSE_ARGS[@]}"
   -m "$MODEL"
   -ngl "$NGL"
   -b 1
