@@ -1,5 +1,6 @@
 #include "expert-cache.cuh"
 #include <cinttypes>
+#include <cstdlib>
 
 // ── LRU helpers (caller must hold cache->mtx) ──────────────────────────
 
@@ -71,6 +72,12 @@ ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_
     cache->lru_tail   = n_slots - 1;
     cache->hits       = 0;
     cache->misses     = 0;
+    cache->h2d_expert_copies = 0;
+    cache->h2d_bytes         = 0;
+    cache->d2d_expert_copies = 0;
+    cache->d2d_bytes         = 0;
+    cache->skipped_h2d_due_to_hit = 0;
+    cache->debug_enabled = std::getenv("GGML_EXPERT_CACHE_DEBUG") != nullptr;
     cache->staging_buf  = nullptr;
     cache->staging_size = 0;
 
@@ -114,8 +121,11 @@ void ggml_expert_cache_free(ggml_expert_cache * cache) {
     int64_t total = cache->hits + cache->misses;
     double hit_rate = total > 0 ? 100.0 * (double)cache->hits / (double)total : 0.0;
 
-    GGML_LOG_INFO("%s: expert cache stats - hits: %" PRId64 ", misses: %" PRId64 ", hit rate: %.1f%%\n",
-                  __func__, cache->hits, cache->misses, hit_rate);
+    GGML_LOG_INFO("%s: expert cache stats - hits: %" PRId64 ", misses: %" PRId64 ", hit rate: %.1f%%, h2d_copies: %" PRId64 ", h2d_bytes: %" PRId64 ", d2d_copies: %" PRId64 ", d2d_bytes: %" PRId64 ", skipped_h2d_due_to_hit: %" PRId64 "\n",
+                  __func__, cache->hits, cache->misses, hit_rate,
+                  cache->h2d_expert_copies, cache->h2d_bytes,
+                  cache->d2d_expert_copies, cache->d2d_bytes,
+                  cache->skipped_h2d_due_to_hit);
 
     if (cache->staging_buf) { CUDA_CHECK(cudaFree(cache->staging_buf)); }
     CUDA_CHECK(cudaFree(cache->pool));
@@ -131,7 +141,8 @@ void * ggml_expert_cache_get(
         int64_t             expert_idx,
         const void *        src_data,
         size_t              expert_size,
-        cudaStream_t        stream) {
+        cudaStream_t        stream,
+        bool *              was_hit) {
     GGML_ASSERT(cache != nullptr);
     GGML_ASSERT(expert_size <= cache->slot_size);
 
@@ -144,6 +155,10 @@ void * ggml_expert_cache_get(
     if (it != cache->slot_map.end()) {
         int idx = it->second;
         cache->hits++;
+        cache->skipped_h2d_due_to_hit++;
+        if (was_hit) {
+            *was_hit = true;
+        }
 
         // promote to MRU
         lru_unlink(cache, idx);
@@ -153,6 +168,9 @@ void * ggml_expert_cache_get(
     }
 
     // ── Cache miss — evict LRU tail ─────────────────────────────────────
+    if (was_hit) {
+        *was_hit = false;
+    }
     cache->misses++;
 
     int victim = cache->lru_tail;
@@ -172,6 +190,8 @@ void * ggml_expert_cache_get(
 
     // copy expert data from CPU to GPU
     CUDA_CHECK(cudaMemcpyAsync(slot.data, src_data, expert_size, cudaMemcpyDefault, stream));
+    cache->h2d_expert_copies++;
+    cache->h2d_bytes += (int64_t) expert_size;
 
     // update slot metadata
     slot.tensor_ptr = tensor_ptr;

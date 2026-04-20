@@ -44,17 +44,14 @@ LD_PATH="$ROOT/build-hip/bin"
 case "$TIER" in
   tier1)
     MODEL="/mnt/nvme/models/Qwen3-30B-A3B-Q4_K_M.gguf"
-    SHARDS=1
     NCMOE=8
     ;;
   tier2)
     MODEL="/mnt/nvme/MiniMax-M2.7/UD-IQ4_XS/MiniMax-M2.7-UD-IQ4_XS-00001-of-00004.gguf"
-    SHARDS=4
     NCMOE=8
     ;;
   tier3)
     MODEL="/mnt/nvme/models/qwen3-235b/Qwen3-235B-A22B-Q4_K_M-00001-of-00005.gguf"
-    SHARDS=5
     NCMOE=8
     ;;
   *)
@@ -63,16 +60,15 @@ case "$TIER" in
     ;;
 esac
 
+[[ -n "$NCMOE_OVERRIDE" ]] && NCMOE="$NCMOE_OVERRIDE"
+
 CACHE_ARGS=()
 if [[ "$CACHE" == "on" ]]; then
   CACHE_ARGS+=(--expert-cache-size 16384)
 fi
 
-[[ -n "$NCMOE_OVERRIDE" ]] && NCMOE="$NCMOE_OVERRIDE"
-
 COMMON_ARGS=(
   -m "$MODEL"
-  -shards "$SHARDS"
   -ngl 99
   -b 1
   -t 1

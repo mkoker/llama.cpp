@@ -50,6 +50,14 @@ struct ggml_expert_cache {
     int64_t hits;
     int64_t misses;
 
+    int64_t h2d_expert_copies;
+    int64_t h2d_bytes;
+    int64_t d2d_expert_copies;
+    int64_t d2d_bytes;
+    int64_t skipped_h2d_due_to_hit;
+
+    bool    debug_enabled;
+
     void *  staging_buf;
     size_t  staging_size;
 };
@@ -63,4 +71,5 @@ void * ggml_expert_cache_get(
     int64_t             expert_idx,
     const void *        src_data,
     size_t              expert_size,
-    cudaStream_t        stream);
+    cudaStream_t        stream,
+    bool *              was_hit = nullptr);
