@@ -658,14 +658,21 @@ static bool ggml_backend_cuda_expert_cache_copy(
         if (!ggml_bitset_get(used, id)) continue;
         
         const void * cpu_ptr = (const char *)input_data + id * expert_size;
+        bool was_hit = false;
         void * cached = ggml_expert_cache_get(
-            ctx->expert_cache, (void *)input_data, id, cpu_ptr, expert_size, stream);
-        
+            ctx->expert_cache, (void *)input_data, id, cpu_ptr, expert_size, stream, &was_hit);
+
+        if (was_hit) {
+            ctx->expert_cache->skipped_h2d_due_to_hit += 1;
+        }
+
         // D2D copy from persistent cache slot to input_cpy
         CUDA_CHECK(cudaMemcpyAsync(
             (char *)input_cpy->data + id * expert_size,
             cached, expert_size,
             cudaMemcpyDeviceToDevice, stream));
+        ctx->expert_cache->d2d_copies += 1;
+        ctx->expert_cache->d2d_bytes  += (int64_t) expert_size;
     }
     
     CUDA_CHECK(cudaStreamSynchronize(stream));
@@ -2500,7 +2507,7 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
                 if (!expert_needed[eid]) continue;
                 const void * cpu_ptr = (const char *)src0->data + eid * nb02;
                 void * cached = ggml_expert_cache_get(
-                    ctx.expert_cache, src0->data, eid, cpu_ptr, nb02, cache_stream);
+                    ctx.expert_cache, src0->data, eid, cpu_ptr, nb02, cache_stream, nullptr);
                 CUDA_CHECK(cudaMemcpyAsync(
                     (char *)ctx.expert_cache->staging_buf + eid * nb02,
                     cached, nb02,
