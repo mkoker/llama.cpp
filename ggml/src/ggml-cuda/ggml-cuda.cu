@@ -642,15 +642,19 @@ void ggml_backend_cuda_alloc_expert_staging(ggml_backend_t backend, size_t size_
 // Returns true if cache handled the copy, false to fall back to normal copy
 static bool ggml_backend_cuda_expert_cache_copy(
     ggml_backend_t backend,
-    ggml_tensor * input_cpy,      // GPU destination tensor
-    const void * input_data,      // CPU source data pointer (full expert tensor)
-    int64_t n_expert,             // number of experts
-    size_t expert_size,           // bytes per expert slice
-    const ggml_bitset_t * used,   // bitset of which experts are needed
-    size_t used_size) {           // size of used bitset in elements
+    ggml_tensor * input_cpy,                    // GPU destination tensor
+    const void * input_data,                    // CPU source data pointer (full expert tensor)
+    int64_t n_expert,                           // number of experts
+    size_t expert_size,                         // bytes per expert slice
+    const ggml_bitset_t * used,                 // bitset of which experts are needed
+    size_t used_size,                           // size of used bitset in elements
+    const void * key_base_data,
+    size_t key_base_size) {
     
     ggml_backend_cuda_context * ctx = (ggml_backend_cuda_context *)backend->context;
-    if (!ctx->expert_cache) return false;
+    if (!ctx->expert_cache || key_base_data == nullptr) return false;
+    if (key_base_size != sizeof(ggml_expert_cache_key_base)) return false;
+    const ggml_expert_cache_key_base * key_base = (const ggml_expert_cache_key_base *) key_base_data;
     
     cudaStream_t stream = ctx->stream();
     
@@ -660,7 +664,7 @@ static bool ggml_backend_cuda_expert_cache_copy(
         const void * cpu_ptr = (const char *)input_data + id * expert_size;
         bool was_hit = false;
         void * cached = ggml_expert_cache_get(
-            ctx->expert_cache, (void *)input_data, id, cpu_ptr, expert_size, stream, &was_hit);
+            ctx->expert_cache, *key_base, id, cpu_ptr, expert_size, stream, &was_hit);
 
         if (was_hit) {
             ctx->expert_cache->skipped_h2d_due_to_hit += 1;

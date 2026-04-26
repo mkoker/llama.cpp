@@ -134,19 +134,19 @@ void ggml_expert_cache_free(ggml_expert_cache * cache) {
 // ── Lookup / Insert ─────────────────────────────────────────────────────
 
 void * ggml_expert_cache_get(
-        ggml_expert_cache * cache,
-        void *              tensor_ptr,
-        int64_t             expert_idx,
-        const void *        src_data,
-        size_t              expert_size,
-        cudaStream_t        stream,
-        bool *              was_hit) {
+        ggml_expert_cache *               cache,
+        const ggml_expert_cache_key_base & key_base,
+        int64_t                           expert_idx,
+        const void *                      src_data,
+        size_t                            expert_size,
+        cudaStream_t                      stream,
+        bool *                            was_hit) {
     GGML_ASSERT(cache != nullptr);
     GGML_ASSERT(expert_size <= cache->slot_size);
 
     std::lock_guard<std::mutex> lock(cache->mtx);
 
-    ggml_expert_cache_key key{tensor_ptr, expert_idx};
+    ggml_expert_cache_key key{key_base, expert_idx};
 
     // ── Cache hit ───────────────────────────────────────────────────────
     auto it = cache->slot_map.find(key);
@@ -177,8 +177,12 @@ void * ggml_expert_cache_get(
 
     // remove old mapping if slot was occupied
     if (slot.tensor_ptr != nullptr) {
-        ggml_expert_cache_key old_key{slot.tensor_ptr, slot.expert_idx};
-        cache->slot_map.erase(old_key);
+        for (auto it = cache->slot_map.begin(); it != cache->slot_map.end(); ++it) {
+            if (it->second == victim) {
+                cache->slot_map.erase(it);
+                break;
+            }
+        }
     }
 
     // unlink victim from LRU tail, push to front
@@ -191,7 +195,7 @@ void * ggml_expert_cache_get(
     cache->h2d_bytes  += (int64_t) expert_size;
 
     // update slot metadata
-    slot.tensor_ptr = tensor_ptr;
+    slot.tensor_ptr = (void *) key_base.source_tensor_id;
     slot.expert_idx = expert_idx;
     slot.size       = expert_size;
 

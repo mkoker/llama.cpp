@@ -1536,6 +1536,59 @@ static bool ggml_backend_sched_alloc_splits(ggml_backend_sched_t sched) {
     return true;
 }
 
+
+struct ggml_sched_expert_cache_key_base {
+    uint64_t source_tensor_id;
+    uint32_t backend_id;
+    uint32_t type;
+    uint64_t ne[4];
+    uint64_t nb[4];
+    uint64_t expert_size;
+};
+
+static uint64_t ggml_sched_expert_cache_source_tensor_id(const ggml_tensor * tensor) {
+    GGML_ASSERT(tensor != nullptr);
+    const ggml_tensor * base = tensor;
+    while (base->view_src != nullptr) {
+        base = base->view_src;
+    }
+    return (uint64_t) (uintptr_t) base;
+}
+
+static ggml_sched_expert_cache_key_base ggml_sched_expert_cache_make_key_base(
+    const ggml_tensor * input,
+    const ggml_tensor * input_cpy,
+    int split_backend_id,
+    size_t expert_size) {
+
+    GGML_ASSERT(input != nullptr);
+    GGML_ASSERT(input_cpy != nullptr);
+    GGML_ASSERT(split_backend_id >= 0);
+    GGML_ASSERT(input->ne[2] > 0);
+
+    // unsupported layout guardrails: expert slices must be stable/contiguous for deterministic keys
+    GGML_ASSERT(ggml_is_contiguous_2(input));
+    GGML_ASSERT(ggml_is_contiguous_2(input_cpy));
+    GGML_ASSERT(input->nb[2] == (int64_t) expert_size);
+    GGML_ASSERT(input_cpy->nb[2] == (int64_t) expert_size);
+    GGML_ASSERT(input->type == input_cpy->type);
+    GGML_ASSERT(input->ne[0] == input_cpy->ne[0]);
+    GGML_ASSERT(input->ne[1] == input_cpy->ne[1]);
+    GGML_ASSERT(input->ne[2] == input_cpy->ne[2]);
+    GGML_ASSERT(input->ne[3] == input_cpy->ne[3]);
+
+    ggml_sched_expert_cache_key_base key_base = {
+        ggml_sched_expert_cache_source_tensor_id(input),
+        (uint32_t) split_backend_id,
+        (uint32_t) input->type,
+        {(uint64_t) input->ne[0], (uint64_t) input->ne[1], (uint64_t) input->ne[2], (uint64_t) input->ne[3]},
+        {(uint64_t) input->nb[0], (uint64_t) input->nb[1], (uint64_t) input->nb[2], (uint64_t) input->nb[3]},
+        (uint64_t) expert_size,
+    };
+
+    return key_base;
+}
+
 static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t sched) {
     GGML_ASSERT(sched);
     struct ggml_backend_sched_split * splits = sched->splits;
@@ -1623,7 +1676,7 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                     }
 
                     // Try expert cache first (persistent GPU cache avoids redundant H2D copies)
-                    typedef bool (*expert_cache_copy_fn_t)(ggml_backend_t, ggml_tensor *, const void *, int64_t, size_t, const ggml_bitset_t *, size_t);
+                    typedef bool (*expert_cache_copy_fn_t)(ggml_backend_t, ggml_tensor *, const void *, int64_t, size_t, const ggml_bitset_t *, size_t, const void *, size_t);
                     auto * dev = ggml_backend_get_device(split_backend);
                     auto * reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
                     expert_cache_copy_fn_t cache_fn = reg ?
@@ -1631,7 +1684,8 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
 
                     bool cache_handled = false;
                     if (cache_fn) {
-                        cache_handled = cache_fn(split_backend, input_cpy, input->data, n_expert, expert_size, used_ids.data(), used_ids.size());
+                        const ggml_sched_expert_cache_key_base key_base = ggml_sched_expert_cache_make_key_base(input, input_cpy, split_backend_id, expert_size);
+                        cache_handled = cache_fn(split_backend, input_cpy, input->data, n_expert, expert_size, used_ids.data(), used_ids.size(), (const void *) &key_base, sizeof(key_base));
                     }
 
                     if (!cache_handled) {
