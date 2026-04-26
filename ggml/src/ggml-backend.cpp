@@ -1537,8 +1537,17 @@ static bool ggml_backend_sched_alloc_splits(ggml_backend_sched_t sched) {
 }
 
 
+static constexpr uint32_t GGML_SCHED_EXPERT_CACHE_KEY_VERSION = 1;
+
+// Scheduler boundary cache key fields (must stay ABI-compatible with ggml-cuda/expert-cache.cuh):
+// - source_tensor_id: canonical root tensor pointer (view chain collapsed)
+// - backend_id: scheduler split backend route
+// - type + ne[] + nb[]: dtype and full shape/stride layout
+// - expert_size: bytes per expert slice
 struct ggml_sched_expert_cache_key_base {
-    uint64_t source_tensor_id;
+    uint32_t version;
+    uint32_t reserved;
+    uintptr_t source_tensor_id;
     uint32_t backend_id;
     uint32_t type;
     uint64_t ne[4];
@@ -1565,12 +1574,13 @@ static ggml_sched_expert_cache_key_base ggml_sched_expert_cache_make_key_base(
     GGML_ASSERT(input_cpy != nullptr);
     GGML_ASSERT(split_backend_id >= 0);
     GGML_ASSERT(input->ne[2] > 0);
+    GGML_ASSERT(expert_size > 0);
 
     // unsupported layout guardrails: expert slices must be stable/contiguous for deterministic keys
     GGML_ASSERT(ggml_is_contiguous_2(input));
     GGML_ASSERT(ggml_is_contiguous_2(input_cpy));
-    GGML_ASSERT(input->nb[2] == (int64_t) expert_size);
-    GGML_ASSERT(input_cpy->nb[2] == (int64_t) expert_size);
+    GGML_ASSERT((size_t) input->nb[2] == expert_size);
+    GGML_ASSERT((size_t) input_cpy->nb[2] == expert_size);
     GGML_ASSERT(input->type == input_cpy->type);
     GGML_ASSERT(input->ne[0] == input_cpy->ne[0]);
     GGML_ASSERT(input->ne[1] == input_cpy->ne[1]);
@@ -1578,7 +1588,9 @@ static ggml_sched_expert_cache_key_base ggml_sched_expert_cache_make_key_base(
     GGML_ASSERT(input->ne[3] == input_cpy->ne[3]);
 
     ggml_sched_expert_cache_key_base key_base = {
-        ggml_sched_expert_cache_source_tensor_id(input),
+        GGML_SCHED_EXPERT_CACHE_KEY_VERSION,
+        0,
+        (uintptr_t) ggml_sched_expert_cache_source_tensor_id(input),
         (uint32_t) split_backend_id,
         (uint32_t) input->type,
         {(uint64_t) input->ne[0], (uint64_t) input->ne[1], (uint64_t) input->ne[2], (uint64_t) input->ne[3]},

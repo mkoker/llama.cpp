@@ -22,6 +22,8 @@ struct ggml_expert_cache_slot {
 // - type + ne[] + nb[]: dtype and full layout shape/strides
 // - expert_size: bytes per expert slice
 struct ggml_expert_cache_key_base {
+    uint32_t  version;          // key schema version for scheduler<->backend ABI safety
+    uint32_t  reserved;         // reserved for future flags
     uintptr_t source_tensor_id;
     uint32_t  backend_id;
     uint32_t  type;
@@ -35,7 +37,8 @@ struct ggml_expert_cache_key {
     int64_t                    expert_idx;
 
     bool operator==(const ggml_expert_cache_key & other) const {
-        return base.source_tensor_id == other.base.source_tensor_id &&
+        return base.version         == other.base.version &&
+               base.source_tensor_id == other.base.source_tensor_id &&
                base.backend_id      == other.base.backend_id &&
                base.type            == other.base.type &&
                base.expert_size     == other.base.expert_size &&
@@ -53,7 +56,8 @@ struct ggml_expert_cache_key {
 
 struct ggml_expert_cache_key_hash {
     size_t operator()(const ggml_expert_cache_key & k) const {
-        size_t h = std::hash<uintptr_t>{}(k.base.source_tensor_id);
+        size_t h = std::hash<uint32_t>{}(k.base.version);
+        h ^= std::hash<uintptr_t>{}(k.base.source_tensor_id) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
 
         h ^= std::hash<uint32_t>{}(k.base.backend_id) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
         h ^= std::hash<uint32_t>{}(k.base.type)       + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
