@@ -106,6 +106,21 @@ struct ggml_expert_cache {
 ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_size_bytes, int device);
 void                ggml_expert_cache_free(ggml_expert_cache * cache);
 
+void * ggml_expert_cache_lookup(
+    ggml_expert_cache *               cache,
+    const ggml_expert_cache_key_base & key_base,
+    int64_t                           expert_idx,
+    bool *                            was_hit = nullptr);
+
+bool ggml_expert_cache_copy_hits(
+    ggml_expert_cache *               cache,
+    const ggml_expert_cache_key_base & key_base,
+    void *                            dst_data,
+    int64_t                           n_expert,
+    size_t                            expert_size,
+    const ggml_bitset_t *             used,
+    cudaStream_t                      stream);
+
 void * ggml_expert_cache_get(
     ggml_expert_cache *               cache,
     const ggml_expert_cache_key_base & key_base,

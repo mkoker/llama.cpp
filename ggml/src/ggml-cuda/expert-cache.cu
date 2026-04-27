@@ -134,6 +134,85 @@ void ggml_expert_cache_free(ggml_expert_cache * cache) {
 
 // ── Lookup / Insert ─────────────────────────────────────────────────────
 
+void * ggml_expert_cache_lookup(
+        ggml_expert_cache *               cache,
+        const ggml_expert_cache_key_base & key_base,
+        int64_t                           expert_idx,
+        bool *                            was_hit) {
+    GGML_ASSERT(cache != nullptr);
+
+    std::lock_guard<std::mutex> lock(cache->mtx);
+
+    ggml_expert_cache_key key{key_base, expert_idx};
+    auto it = cache->slot_map.find(key);
+    if (it == cache->slot_map.end()) {
+        cache->misses++;
+        if (was_hit) {
+            *was_hit = false;
+        }
+        return nullptr;
+    }
+
+    const int idx = it->second;
+    cache->hits++;
+    if (was_hit) {
+        *was_hit = true;
+    }
+
+    // promote to MRU
+    lru_unlink(cache, idx);
+    lru_push_front(cache, idx);
+
+    return cache->slots[idx].data;
+}
+
+
+bool ggml_expert_cache_copy_hits(
+        ggml_expert_cache *               cache,
+        const ggml_expert_cache_key_base & key_base,
+        void *                            dst_data,
+        int64_t                           n_expert,
+        size_t                            expert_size,
+        const ggml_bitset_t *             used,
+        cudaStream_t                      stream) {
+    GGML_ASSERT(cache != nullptr);
+    GGML_ASSERT(expert_size <= cache->slot_size);
+
+    std::lock_guard<std::mutex> lock(cache->mtx);
+
+    for (int64_t id = 0; id < n_expert; ++id) {
+        if (!ggml_bitset_get(used, id)) {
+            continue;
+        }
+
+        ggml_expert_cache_key key{key_base, id};
+        auto it = cache->slot_map.find(key);
+        if (it == cache->slot_map.end()) {
+            cache->misses++;
+            return false;
+        }
+
+        const int idx = it->second;
+        cache->hits++;
+        lru_unlink(cache, idx);
+        lru_push_front(cache, idx);
+
+        CUDA_CHECK(cudaMemcpyAsync(
+            (char *) dst_data + id * (int64_t) expert_size,
+            cache->slots[idx].data,
+            expert_size,
+            cudaMemcpyDeviceToDevice,
+            stream));
+
+        cache->d2d_copies += 1;
+        cache->d2d_bytes  += (int64_t) expert_size;
+        cache->skipped_h2d_due_to_hit += 1;
+    }
+
+    return true;
+}
+
+
 void * ggml_expert_cache_get(
         ggml_expert_cache *               cache,
         const ggml_expert_cache_key_base & key_base,
@@ -149,58 +228,50 @@ void * ggml_expert_cache_get(
 
     ggml_expert_cache_key key{key_base, expert_idx};
 
-    // ── Cache hit ───────────────────────────────────────────────────────
     auto it = cache->slot_map.find(key);
     if (it != cache->slot_map.end()) {
-        int idx = it->second;
+        const int idx = it->second;
         cache->hits++;
         if (was_hit) {
             *was_hit = true;
         }
 
-        // promote to MRU
         lru_unlink(cache, idx);
         lru_push_front(cache, idx);
 
         return cache->slots[idx].data;
     }
 
-    // ── Cache miss — evict LRU tail ─────────────────────────────────────
     cache->misses++;
     if (was_hit) {
         *was_hit = false;
     }
 
-    int victim = cache->lru_tail;
+    const int victim = cache->lru_tail;
     GGML_ASSERT(victim >= 0);
 
     ggml_expert_cache_slot & slot = cache->slots[victim];
 
-    // remove old mapping if slot was occupied
     if (slot.tensor_ptr != nullptr) {
-        for (auto it = cache->slot_map.begin(); it != cache->slot_map.end(); ++it) {
-            if (it->second == victim) {
-                cache->slot_map.erase(it);
+        for (auto old = cache->slot_map.begin(); old != cache->slot_map.end(); ++old) {
+            if (old->second == victim) {
+                cache->slot_map.erase(old);
                 break;
             }
         }
     }
 
-    // unlink victim from LRU tail, push to front
     lru_unlink(cache, victim);
     lru_push_front(cache, victim);
 
-    // copy expert data from CPU to GPU
     CUDA_CHECK(cudaMemcpyAsync(slot.data, src_data, expert_size, cudaMemcpyDefault, stream));
     cache->h2d_copies += 1;
     cache->h2d_bytes  += (int64_t) expert_size;
 
-    // update slot metadata
     slot.tensor_ptr = (void *) key_base.source_tensor_id;
     slot.expert_idx = expert_idx;
     slot.size       = expert_size;
 
-    // insert new mapping
     cache->slot_map[key] = victim;
 
     return slot.data;
