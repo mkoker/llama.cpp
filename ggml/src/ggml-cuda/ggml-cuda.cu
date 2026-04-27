@@ -603,17 +603,59 @@ ggml_backend_cuda_context::~ggml_backend_cuda_context() {
         ggml_expert_cache_free(expert_cache);
         expert_cache = nullptr;
     }
+    expert_cache_total_size = 0;
+    expert_cache_slot_size  = 0;
+    expert_cache_config_calls = 0;
 }
 
 void ggml_backend_cuda_set_expert_cache(ggml_backend_t backend, size_t size_mib, size_t slot_size_bytes) {
     ggml_backend_cuda_context * ctx = (ggml_backend_cuda_context *) backend->context;
-    if (ctx->expert_cache) {
+
+    ctx->expert_cache_config_calls += 1;
+
+    if (size_mib == 0 || slot_size_bytes == 0) {
+        if (ctx->expert_cache) {
+            ggml_expert_cache_free(ctx->expert_cache);
+            ctx->expert_cache = nullptr;
+        }
+        ctx->expert_cache_total_size = 0;
+        ctx->expert_cache_slot_size  = 0;
+        return;
+    }
+
+    size_t total_bytes = size_mib * 1024 * 1024;
+
+    // safety: avoid per-token/per-graph cache churn by reusing existing arena when config is unchanged
+    if (ctx->expert_cache != nullptr &&
+        ctx->expert_cache_total_size == total_bytes &&
+        ctx->expert_cache_slot_size  == slot_size_bytes) {
+        if (ctx->expert_cache_config_calls > 1) {
+            GGML_LOG_DEBUG("%s: reuse existing expert cache arena (%.1f MiB, slot %.1f MiB)\n",
+                           __func__,
+                           (double) total_bytes / (1024.0 * 1024.0),
+                           (double) slot_size_bytes / (1024.0 * 1024.0));
+        }
+        return;
+    }
+
+    if (ctx->expert_cache != nullptr) {
+        GGML_LOG_WARN("%s: reinitializing expert cache arena due to config change (%.1f MiB->%.1f MiB, slot %.1f MiB->%.1f MiB)\n",
+                      __func__,
+                      (double) ctx->expert_cache_total_size / (1024.0 * 1024.0),
+                      (double) total_bytes / (1024.0 * 1024.0),
+                      (double) ctx->expert_cache_slot_size / (1024.0 * 1024.0),
+                      (double) slot_size_bytes / (1024.0 * 1024.0));
         ggml_expert_cache_free(ctx->expert_cache);
         ctx->expert_cache = nullptr;
     }
-    if (size_mib > 0 && slot_size_bytes > 0) {
-        size_t total_bytes = size_mib * 1024 * 1024;
-        ctx->expert_cache = ggml_expert_cache_init(total_bytes, slot_size_bytes, ctx->device);
+
+    ctx->expert_cache = ggml_expert_cache_init(total_bytes, slot_size_bytes, ctx->device);
+    if (ctx->expert_cache != nullptr) {
+        ctx->expert_cache_total_size = total_bytes;
+        ctx->expert_cache_slot_size  = slot_size_bytes;
+    } else {
+        ctx->expert_cache_total_size = 0;
+        ctx->expert_cache_slot_size  = 0;
     }
 }
 

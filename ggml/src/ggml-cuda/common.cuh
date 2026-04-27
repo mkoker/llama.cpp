@@ -1405,6 +1405,9 @@ struct ggml_backend_cuda_context {
     ggml_cuda_stream_context concurrent_stream_context;
 
     ggml_expert_cache * expert_cache = nullptr;
+    size_t expert_cache_total_size = 0;
+    size_t expert_cache_slot_size  = 0;
+    uint64_t expert_cache_config_calls = 0;
 
     ~ggml_backend_cuda_context();
 

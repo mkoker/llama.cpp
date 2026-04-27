@@ -82,6 +82,7 @@ struct ggml_expert_cache {
     int                      n_slots;
     size_t                   slot_size; // bytes per slot (largest expert slice)
     size_t                   total_size;
+    int                      device;
 
     int lru_head; // most recently used
     int lru_tail; // least recently used (eviction candidate)

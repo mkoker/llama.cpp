@@ -67,6 +67,7 @@ ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_
     cache->n_slots    = n_slots;
     cache->slot_size  = slot_size_bytes;
     cache->total_size = pool_bytes;
+    cache->device     = device;
     cache->lru_head   = 0;
     cache->lru_tail   = n_slots - 1;
     cache->hits       = 0;
@@ -105,8 +106,8 @@ ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_
         cache->slots[i].next       = (i + 1 < n_slots) ? i + 1 : -1;
     }
 
-    GGML_LOG_INFO("%s: expert cache initialized — %d slots, %.1f MiB total\n",
-                  __func__, n_slots, (double)pool_bytes / (1024.0 * 1024.0));
+    GGML_LOG_INFO("%s: expert cache arena initialized on device %d — %d slots, %.1f MiB total\n",
+                  __func__, device, n_slots, (double)pool_bytes / (1024.0 * 1024.0));
 
     return cache;
 }
@@ -119,8 +120,8 @@ void ggml_expert_cache_free(ggml_expert_cache * cache) {
     int64_t total = cache->hits + cache->misses;
     double hit_rate = total > 0 ? 100.0 * (double)cache->hits / (double)total : 0.0;
 
-    GGML_LOG_INFO("%s: expert cache stats - hits: %" PRId64 ", misses: %" PRId64 ", hit rate: %.1f%%, h2d copies: %" PRId64 ", h2d bytes: %" PRId64 ", d2d copies: %" PRId64 ", d2d bytes: %" PRId64 ", skipped h2d: %" PRId64 "\n",
-                  __func__, cache->hits, cache->misses, hit_rate,
+    GGML_LOG_INFO("%s: expert cache stats (device %d) - hits: %" PRId64 ", misses: %" PRId64 ", hit rate: %.1f%%, h2d copies: %" PRId64 ", h2d bytes: %" PRId64 ", d2d copies: %" PRId64 ", d2d bytes: %" PRId64 ", skipped h2d: %" PRId64 "\n",
+                  __func__, cache->device, cache->hits, cache->misses, hit_rate,
                   cache->h2d_copies, cache->h2d_bytes,
                   cache->d2d_copies, cache->d2d_bytes,
                   cache->skipped_h2d_due_to_hit);
