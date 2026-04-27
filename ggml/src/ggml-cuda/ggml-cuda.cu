@@ -2582,11 +2582,22 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
                 }
             }
 
+            const ggml_expert_cache_key_base key_base = {
+                1u,
+                0u,
+                (uintptr_t) src0_orig,
+                (uint32_t) ctx.device,
+                (uint32_t) src0->type,
+                {(uint64_t) src0->ne[0], (uint64_t) src0->ne[1], (uint64_t) src0->ne[2], (uint64_t) src0->ne[3]},
+                {(uint64_t) src0->nb[0], (uint64_t) src0->nb[1], (uint64_t) src0->nb[2], (uint64_t) src0->nb[3]},
+                (uint64_t) nb02,
+            };
+
             for (int64_t eid = 0; eid < ne02; eid++) {
                 if (!expert_needed[eid]) continue;
                 const void * cpu_ptr = (const char *)src0->data + eid * nb02;
                 void * cached = ggml_expert_cache_get(
-                    ctx.expert_cache, src0->data, eid, cpu_ptr, nb02, cache_stream, nullptr);
+                    ctx.expert_cache, key_base, eid, cpu_ptr, nb02, cache_stream, nullptr);
                 CUDA_CHECK(cudaMemcpyAsync(
                     (char *)ctx.expert_cache->staging_buf + eid * nb02,
                     cached, nb02,
