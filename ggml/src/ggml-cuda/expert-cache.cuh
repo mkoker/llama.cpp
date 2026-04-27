@@ -128,4 +128,5 @@ void * ggml_expert_cache_get(
     const void *                      src_data,
     size_t                            expert_size,
     cudaStream_t                      stream,
-    bool *                            was_hit = nullptr);
+    bool *                            was_hit = nullptr,
+    bool                              count_h2d = true);

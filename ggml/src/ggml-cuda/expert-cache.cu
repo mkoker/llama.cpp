@@ -220,7 +220,8 @@ void * ggml_expert_cache_get(
         const void *                      src_data,
         size_t                            expert_size,
         cudaStream_t                      stream,
-        bool *                            was_hit) {
+        bool *                            was_hit,
+        bool                              count_h2d) {
     GGML_ASSERT(cache != nullptr);
     GGML_ASSERT(expert_size <= cache->slot_size);
 
@@ -265,8 +266,13 @@ void * ggml_expert_cache_get(
     lru_push_front(cache, victim);
 
     CUDA_CHECK(cudaMemcpyAsync(slot.data, src_data, expert_size, cudaMemcpyDefault, stream));
-    cache->h2d_copies += 1;
-    cache->h2d_bytes  += (int64_t) expert_size;
+    if (count_h2d) {
+        cache->h2d_copies += 1;
+        cache->h2d_bytes  += (int64_t) expert_size;
+    } else {
+        cache->d2d_copies += 1;
+        cache->d2d_bytes  += (int64_t) expert_size;
+    }
 
     slot.tensor_ptr = (void *) key_base.source_tensor_id;
     slot.expert_idx = expert_idx;

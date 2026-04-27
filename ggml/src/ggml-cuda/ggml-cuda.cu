@@ -680,8 +680,8 @@ void ggml_backend_cuda_alloc_expert_staging(ggml_backend_t backend, size_t size_
 }
 
 
-// Copy expert slices using persistent GPU cache to avoid redundant H2D transfers
-// Returns true if cache handled the copy, false to fall back to normal copy
+// Copy expert slices from cache when all required experts are present.
+// Returns true on full cache hit (scheduler can skip H2D fallback), false on any miss.
 static bool ggml_backend_cuda_expert_cache_copy(
     ggml_backend_t backend,
     ggml_tensor * input_cpy,                    // GPU destination tensor
@@ -715,6 +715,47 @@ static bool ggml_backend_cuda_expert_cache_copy(
 
     CUDA_CHECK(cudaStreamSynchronize(stream));
     return true;
+}
+
+// Insert experts into cache from already-copied device destination slices.
+// Called by scheduler miss path after normal selective H2D copy succeeds.
+static void ggml_backend_cuda_expert_cache_insert(
+    ggml_backend_t backend,
+    ggml_tensor * input_cpy,
+    int64_t n_expert,
+    size_t expert_size,
+    const ggml_bitset_t * used,
+    size_t used_size,
+    const void * key_base_data,
+    size_t key_base_size) {
+    (void) used_size;
+
+    ggml_backend_cuda_context * ctx = (ggml_backend_cuda_context *) backend->context;
+    if (!ctx->expert_cache || key_base_data == nullptr) return;
+    if (key_base_size != sizeof(ggml_expert_cache_key_base)) return;
+
+    const ggml_expert_cache_key_base * key_base = (const ggml_expert_cache_key_base *) key_base_data;
+    cudaStream_t stream = ctx->stream();
+
+    for (int64_t id = 0; id < n_expert; ++id) {
+        if (!ggml_bitset_get(used, id)) {
+            continue;
+        }
+
+        const void * src_dev = (const uint8_t *) input_cpy->data + id * (int64_t) expert_size;
+        bool was_hit = false;
+        (void) ggml_expert_cache_get(
+            ctx->expert_cache,
+            *key_base,
+            id,
+            src_dev,
+            expert_size,
+            stream,
+            &was_hit,
+            false);
+    }
+
+    CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 
 // cuda buffer
@@ -5403,6 +5444,9 @@ static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, con
     }
     if (strcmp(name, "ggml_backend_cuda_expert_cache_copy") == 0) {
         return (void *)ggml_backend_cuda_expert_cache_copy;
+    }
+    if (strcmp(name, "ggml_backend_cuda_expert_cache_insert") == 0) {
+        return (void *)ggml_backend_cuda_expert_cache_insert;
     }
     if (strcmp(name, "ggml_backend_cuda_alloc_expert_staging") == 0) {
         return (void *)ggml_backend_cuda_alloc_expert_staging;

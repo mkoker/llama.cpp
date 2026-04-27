@@ -1689,15 +1689,19 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
 
                     // Try expert cache first (persistent GPU cache avoids redundant H2D copies)
                     typedef bool (*expert_cache_copy_fn_t)(ggml_backend_t, ggml_tensor *, const void *, int64_t, size_t, const ggml_bitset_t *, size_t, const void *, size_t);
+                    typedef void (*expert_cache_insert_fn_t)(ggml_backend_t, ggml_tensor *, int64_t, size_t, const ggml_bitset_t *, size_t, const void *, size_t);
                     auto * dev = ggml_backend_get_device(split_backend);
                     auto * reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
-                    expert_cache_copy_fn_t cache_fn = reg ?
+                    expert_cache_copy_fn_t cache_copy_fn = reg ?
                         (expert_cache_copy_fn_t)ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_expert_cache_copy") : nullptr;
+                    expert_cache_insert_fn_t cache_insert_fn = reg ?
+                        (expert_cache_insert_fn_t)ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_expert_cache_insert") : nullptr;
+
+                    const ggml_sched_expert_cache_key_base key_base = ggml_sched_expert_cache_make_key_base(input, input_cpy, split_backend_id, expert_size);
 
                     bool cache_handled = false;
-                    if (cache_fn) {
-                        const ggml_sched_expert_cache_key_base key_base = ggml_sched_expert_cache_make_key_base(input, input_cpy, split_backend_id, expert_size);
-                        cache_handled = cache_fn(split_backend, input_cpy, input->data, n_expert, expert_size, used_ids.data(), used_ids.size(), (const void *) &key_base, sizeof(key_base));
+                    if (cache_copy_fn) {
+                        cache_handled = cache_copy_fn(split_backend, input_cpy, input->data, n_expert, expert_size, used_ids.data(), used_ids.size(), (const void *) &key_base, sizeof(key_base));
                     }
 
                     if (!cache_handled) {
@@ -1737,6 +1741,10 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                             last_id = id;
                         }
                         copy_experts(first_id, last_id);
+
+                        if (cache_insert_fn) {
+                            cache_insert_fn(split_backend, input_cpy, n_expert, expert_size, used_ids.data(), used_ids.size(), (const void *) &key_base, sizeof(key_base));
+                        }
                     }
                 } else {
                     // try async copy, but if not possible, we can still use a sync copy without synchronizing the dst backend, since we handle the synchronization here with multiple copies and events
