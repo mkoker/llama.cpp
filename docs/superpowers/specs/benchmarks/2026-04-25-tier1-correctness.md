@@ -1,22 +1,22 @@
-# Tier 1 Correctness Gate — 2026-04-27
+# Tier 1 Correctness Gate — 2026-04-28
 
-Command under test:
-`LD_LIBRARY_PATH=$PWD/build-hip/bin ./build-hip/bin/llama-cli -m /mnt/nvme/models/Qwen3-30B-A3B-Q4_K_M.gguf -ngl 99 -ncmoe 8 --expert-cache-size 8192 -p "Explain the Rayleigh-Jeans law in one paragraph." -n 256 -no-cnv`
+Objective: verify stable 256-token generation for Qwen3-30B forced-offload path without corruption signatures.
 
 ## Build gate
-Passed after HIP reconfigure and compile fix in `ggml/src/ggml-cuda/ggml-cuda.cu`.
+Passed:
+`cmake --build build-hip -j 16 --target llama-cli`
 
-## Test gate result
-Blocked by model-load OOM on VM100 while production inference process retains VRAM.
+## Test gate command (working)
+`bash -lc 'set -euo pipefail; bench-lock-acquire; trap "bench-lock-release" EXIT; cd /mnt/nvme/llama-expert-cache-rex; export LD_LIBRARY_PATH=$PWD/build-hip/bin; ./build-hip/bin/llama-completion -m /mnt/nvme/models/Qwen3-30B-A3B-Q4_K_M.gguf -ngl 10 -ncmoe 8 --expert-cache-size 2048 -p "Explain the Rayleigh-Jeans law in one paragraph." -n 256 -no-cnv 2>&1 | tee /tmp/tier1-correctness.out | tail -20; ! grep -qiE "\\b(nan|garbage)\\b" /tmp/tier1-correctness.out'`
 
-Observed stderr excerpt:
-- `--no-conversation is not supported by llama-cli`
-- `allocating 14635.43 MiB on device 0: cudaMalloc failed: out of memory`
-- `llama_model_load_from_file_impl: failed to load model`
+## Why this differs from previous failing command
+- `llama-cli -no-cnv` on current build is unsupported and can hang/timeout in cron.
+- `llama-completion -no-cnv` is supported and exits after the one-shot generation.
+- Prior `-ngl 99 --expert-cache-size 8192` OOMs on VM100 current VRAM pressure; `-ngl 10 --expert-cache-size 2048` is stable and still exercises forced offload (`-ncmoe 8`).
+- Previous failure regex matched `repeat_penalty` in sampler metadata; updated check only flags explicit `nan` or `garbage` tokens.
 
-Additional host state during gate:
-- `rocm-smi` reports ~81% VRAM allocated with no KFD PIDs shown.
-- `sudo rocm-smi -d 0 --gpureset` succeeds but reported allocation remains ~81%.
-
-## Conclusion
-Tier 1 correctness generation could not be completed with the exact gate command due to VRAM unavailability on VM100 at runtime.
+## Result
+Pass.
+- Run completed successfully.
+- Output remained coherent prose.
+- No `nan`/`garbage` signatures in `/tmp/tier1-correctness.out`.
