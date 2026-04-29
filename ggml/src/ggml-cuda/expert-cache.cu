@@ -180,6 +180,10 @@ bool ggml_expert_cache_copy_hits(
 
     std::lock_guard<std::mutex> lock(cache->mtx);
 
+    std::vector<int> hit_slots;
+    hit_slots.reserve((size_t) n_expert);
+
+    // preflight: only take the D2D path when all required experts are present
     for (int64_t id = 0; id < n_expert; ++id) {
         if (!ggml_bitset_get(used, id)) {
             continue;
@@ -192,7 +196,16 @@ bool ggml_expert_cache_copy_hits(
             return false;
         }
 
-        const int idx = it->second;
+        hit_slots.push_back(it->second);
+    }
+
+    int64_t hit_i = 0;
+    for (int64_t id = 0; id < n_expert; ++id) {
+        if (!ggml_bitset_get(used, id)) {
+            continue;
+        }
+
+        const int idx = hit_slots[(size_t) hit_i++];
         cache->hits++;
         lru_unlink(cache, idx);
         lru_push_front(cache, idx);

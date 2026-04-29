@@ -680,8 +680,9 @@ void ggml_backend_cuda_alloc_expert_staging(ggml_backend_t backend, size_t size_
 }
 
 
-// Copy expert slices from cache when all required experts are present.
-// Returns true on full cache hit (scheduler can skip H2D fallback), false on any miss.
+// Copy expert slices via persistent cache.
+// On hit: D2D from cache slot to destination.
+// On miss: one-time H2D into cache slot, then D2D to destination.
 static bool ggml_backend_cuda_expert_cache_copy(
     ggml_backend_t backend,
     ggml_tensor * input_cpy,                    // GPU destination tensor
@@ -692,7 +693,6 @@ static bool ggml_backend_cuda_expert_cache_copy(
     size_t used_size,                           // size of used bitset in elements
     const void * key_base_data,
     size_t key_base_size) {
-    (void) input_data;
     (void) used_size;
 
     ggml_backend_cuda_context * ctx = (ggml_backend_cuda_context *) backend->context;
@@ -702,15 +702,35 @@ static bool ggml_backend_cuda_expert_cache_copy(
     const ggml_expert_cache_key_base * key_base = (const ggml_expert_cache_key_base *) key_base_data;
     cudaStream_t stream = ctx->stream();
 
-    if (!ggml_expert_cache_copy_hits(
+    for (int64_t id = 0; id < n_expert; ++id) {
+        if (!ggml_bitset_get(used, id)) {
+            continue;
+        }
+
+        const void * src_host = (const uint8_t *) input_data + id * (int64_t) expert_size;
+        bool was_hit = false;
+        void * src_dev = ggml_expert_cache_get(
             ctx->expert_cache,
             *key_base,
-            input_cpy->data,
-            n_expert,
+            id,
+            src_host,
             expert_size,
-            used,
-            stream)) {
-        return false;
+            stream,
+            &was_hit,
+            true);
+
+        CUDA_CHECK(cudaMemcpyAsync(
+            (uint8_t *) input_cpy->data + id * (int64_t) expert_size,
+            src_dev,
+            expert_size,
+            cudaMemcpyDeviceToDevice,
+            stream));
+
+        ctx->expert_cache->d2d_copies += 1;
+        ctx->expert_cache->d2d_bytes  += (int64_t) expert_size;
+        if (was_hit) {
+            ctx->expert_cache->skipped_h2d_due_to_hit += 1;
+        }
     }
 
     return true;
