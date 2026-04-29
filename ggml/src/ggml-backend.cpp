@@ -1561,6 +1561,13 @@ static uint64_t ggml_sched_expert_cache_source_tensor_id(const ggml_tensor * ten
     while (base->view_src != nullptr) {
         base = base->view_src;
     }
+
+    // Tensor object addresses can change between scheduler graph rebuilds.
+    // Use the underlying source data pointer when available so cache keys stay stable across tokens.
+    if (base->data != nullptr) {
+        return (uint64_t) (uintptr_t) base->data;
+    }
+
     return (uint64_t) (uintptr_t) base;
 }
 

@@ -713,7 +713,6 @@ static bool ggml_backend_cuda_expert_cache_copy(
         return false;
     }
 
-    CUDA_CHECK(cudaStreamSynchronize(stream));
     return true;
 }
 
@@ -755,7 +754,6 @@ static void ggml_backend_cuda_expert_cache_insert(
             false);
     }
 
-    CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 
 // cuda buffer
