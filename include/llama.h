@@ -1007,6 +1007,20 @@ extern "C" {
     // otherwise: float[n_embd] (1-dimensional)
     LLAMA_API float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id);
 
+    // Configure intermediate transformer layer outputs to capture during decode.
+    // Passing NULL or n_layer_ids == 0 disables capture. Invalid layer ids are ignored.
+    LLAMA_API void llama_set_layer_outputs(struct llama_context * ctx, const int32_t * layer_ids, size_t n_layer_ids);
+
+    // Number of configured layer outputs.
+    LLAMA_API size_t llama_get_layer_outputs_count(struct llama_context * ctx);
+
+    // Configured layer ids, owned by ctx and valid until llama_set_layer_outputs() or ctx destruction.
+    LLAMA_API const int32_t * llama_get_layer_outputs_ids(struct llama_context * ctx);
+
+    // Get captured F32 outputs for a layer from the most recent decode step.
+    // Layout is row-major [n_tokens][n_embd]. Returns NULL if unavailable.
+    LLAMA_API const float * llama_get_layer_outputs(struct llama_context * ctx, int32_t layer_id, size_t * n_tokens, size_t * n_embd);
+
     //
     // backend sampling API [EXPERIMENTAL]
     // note: use only if the llama_context was created with at least one llama_sampler_seq_config

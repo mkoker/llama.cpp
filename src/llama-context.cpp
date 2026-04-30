@@ -860,6 +860,70 @@ float * llama_context::get_embeddings_seq(llama_seq_id seq_id) {
     return it->second.data();
 }
 
+void llama_context::set_layer_outputs(const int32_t * layer_ids, size_t n_layer_ids) {
+    layer_output_ids.clear();
+    layer_outputs.clear();
+
+    if (layer_ids == nullptr || n_layer_ids == 0) {
+        return;
+    }
+
+    const int32_t n_layer = (int32_t) model.hparams.n_layer;
+
+    for (size_t i = 0; i < n_layer_ids; ++i) {
+        const int32_t layer_id = layer_ids[i];
+
+        if (layer_id < 0 || layer_id >= n_layer) {
+            LLAMA_LOG_WARN("%s: ignoring invalid layer id %d (n_layer = %d)\n", __func__, layer_id, n_layer);
+            continue;
+        }
+
+        bool exists = false;
+        for (const int32_t configured_id : layer_output_ids) {
+            if (configured_id == layer_id) {
+                exists = true;
+                break;
+            }
+        }
+
+        if (!exists) {
+            layer_output_ids.push_back(layer_id);
+            layer_outputs[layer_id] = {};
+        }
+    }
+}
+
+size_t llama_context::get_layer_outputs_count() const {
+    return layer_output_ids.size();
+}
+
+const int32_t * llama_context::get_layer_outputs_ids() const {
+    return layer_output_ids.empty() ? nullptr : layer_output_ids.data();
+}
+
+const float * llama_context::get_layer_outputs(int32_t layer_id, size_t * n_tokens, size_t * n_embd) const {
+    if (n_tokens) {
+        *n_tokens = 0;
+    }
+    if (n_embd) {
+        *n_embd = 0;
+    }
+
+    const auto it = layer_outputs.find(layer_id);
+    if (it == layer_outputs.end() || it->second.data.empty()) {
+        return nullptr;
+    }
+
+    if (n_tokens) {
+        *n_tokens = it->second.n_tokens;
+    }
+    if (n_embd) {
+        *n_embd = it->second.n_embd;
+    }
+
+    return it->second.data.data();
+}
+
 llama_token llama_context::get_sampled_token_ith(int32_t idx) {
     output_reorder();
 
@@ -3123,6 +3187,24 @@ float * llama_get_embeddings_seq(llama_context * ctx, llama_seq_id seq_id) {
     ctx->synchronize();
 
     return ctx->get_embeddings_seq(seq_id);
+}
+
+void llama_set_layer_outputs(llama_context * ctx, const int32_t * layer_ids, size_t n_layer_ids) {
+    ctx->set_layer_outputs(layer_ids, n_layer_ids);
+}
+
+size_t llama_get_layer_outputs_count(llama_context * ctx) {
+    return ctx->get_layer_outputs_count();
+}
+
+const int32_t * llama_get_layer_outputs_ids(llama_context * ctx) {
+    return ctx->get_layer_outputs_ids();
+}
+
+const float * llama_get_layer_outputs(llama_context * ctx, int32_t layer_id, size_t * n_tokens, size_t * n_embd) {
+    ctx->synchronize();
+
+    return ctx->get_layer_outputs(layer_id, n_tokens, n_embd);
 }
 
 bool llama_set_sampler(llama_context * ctx, llama_seq_id seq_id, llama_sampler * smpl) {

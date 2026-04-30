@@ -69,6 +69,11 @@ struct llama_context {
     float * get_embeddings_ith(int32_t i);
     float * get_embeddings_seq(llama_seq_id seq_id);
 
+    void set_layer_outputs(const int32_t * layer_ids, size_t n_layer_ids);
+    size_t get_layer_outputs_count() const;
+    const int32_t * get_layer_outputs_ids() const;
+    const float * get_layer_outputs(int32_t layer_id, size_t * n_tokens, size_t * n_embd) const;
+
     llama_token * get_sampled_tokens() const;
     llama_token   get_sampled_token_ith(int32_t idx);
 
@@ -284,6 +289,16 @@ private:
     // sequence embeddings output (map of [n_embd] vectors)
     // populated only when pooling_type != LLAMA_POOLING_TYPE_NONE
     std::map<llama_seq_id, std::vector<float>> embd_seq;
+
+    // requested intermediate layer outputs and captured host buffers
+    struct layer_output {
+        std::vector<float> data;
+        size_t n_tokens = 0;
+        size_t n_embd   = 0;
+    };
+
+    std::vector<int32_t> layer_output_ids;
+    std::map<int32_t, layer_output> layer_outputs;
 
     // reuse the batch_allocr to avoid unnecessary memory allocations
     std::unique_ptr<llama_batch_allocr> balloc;
