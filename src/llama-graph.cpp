@@ -969,7 +969,10 @@ void llm_graph_context::cb(ggml_tensor * cur, const char * name, int il) const {
     if (il >= 0 && name != nullptr && strcmp(name, "l_out") == 0) {
         for (const int32_t layer_id : layer_output_ids) {
             if (layer_id == il) {
-                res->t_layer_outputs[il] = cur;
+                ggml_tensor * out = ggml_cont(ctx0, cur);
+                ggml_format_name(out, "layer_%d_output", il);
+                ggml_build_forward_expand(gf, out);
+                res->t_layer_outputs[il] = out;
                 break;
             }
         }
