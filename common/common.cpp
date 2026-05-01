@@ -1233,6 +1233,9 @@ common_init_result::common_init_result(common_params & params) :
     }
 
     llama_context * lctx = llama_init_from_model(model, cparams);
+    if (lctx != NULL && !params.layer_outputs.empty()) {
+        llama_set_layer_outputs(lctx, params.layer_outputs.data(), params.layer_outputs.size());
+    }
     if (lctx == NULL) {
         LOG_ERR("%s: failed to create context with model '%s'\n", __func__, params.model.path.c_str());
         return;

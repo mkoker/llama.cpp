@@ -546,6 +546,7 @@ struct llm_graph_params {
     const llama_cross            * cross;
 
     std::map<llama_seq_id, llama_sampler *> samplers;
+    std::vector<int32_t> layer_output_ids;
 
     static bool samplers_equal(
           const std::map<llama_seq_id, llama_sampler *> & lhs,
@@ -630,7 +631,8 @@ struct llm_graph_params {
             gtype == other.gtype &&
             cvec  == other.cvec  &&
             loras == other.loras &&
-            cross == other.cross;
+            cross == other.cross &&
+            layer_output_ids == other.layer_output_ids;
     }
 };
 
@@ -672,6 +674,8 @@ public:
     ggml_tensor * t_logits      = nullptr;
     ggml_tensor * t_embd        = nullptr;
     ggml_tensor * t_embd_pooled = nullptr;
+
+    std::map<int32_t, ggml_tensor*> t_layer_outputs;
 
     std::map<llama_seq_id, ggml_tensor*> t_sampled_logits;
     std::map<llama_seq_id, ggml_tensor*> t_candidates;
@@ -760,6 +764,7 @@ struct llm_graph_context {
     const llama_cross            * cross;
 
     std::map<llama_seq_id, llama_sampler *> samplers;
+    std::vector<int32_t> layer_output_ids;
 
     const llm_graph_cb & cb_func;
 

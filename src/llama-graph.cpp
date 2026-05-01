@@ -805,6 +805,7 @@ void llm_graph_result::reset() {
     t_logits      = nullptr;
     t_embd        = nullptr;
     t_embd_pooled = nullptr;
+    t_layer_outputs.clear();
     t_sampled.clear();
     t_sampled_probs.clear();
     t_sampled_logits.clear();
@@ -842,6 +843,11 @@ void llm_graph_result::set_outputs() {
     }
     if (t_embd_pooled != nullptr) {
         ggml_set_output(t_embd_pooled);
+    }
+    for (auto & [layer_id, t] : t_layer_outputs) {
+        if (t != nullptr) {
+            ggml_set_output(t);
+        }
     }
     for (auto & [seq_id, t] : t_sampled) {
         if (t != nullptr) {
@@ -947,6 +953,7 @@ llm_graph_context::llm_graph_context(const llm_graph_params & params) :
     mctx             (params.mctx),
     cross            (params.cross),
     samplers         (params.samplers),
+    layer_output_ids (params.layer_output_ids),
     cb_func          (params.cb),
     res              (params.res),
     ctx0             (res->get_ctx()),
@@ -957,6 +964,15 @@ llm_graph_context::llm_graph_context(const llm_graph_params & params) :
 void llm_graph_context::cb(ggml_tensor * cur, const char * name, int il) const {
     if (cb_func) {
         cb_func(ubatch, cur, name, il);
+    }
+
+    if (il >= 0 && name != nullptr && strcmp(name, "l_out") == 0) {
+        for (const int32_t layer_id : layer_output_ids) {
+            if (layer_id == il) {
+                res->t_layer_outputs[il] = cur;
+                break;
+            }
+        }
     }
 }
 

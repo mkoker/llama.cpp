@@ -1565,6 +1565,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_COMPLETION}));
     add_opt(common_arg(
+        {"--layer-outputs"}, "L0,L1,...",
+        "capture hidden states from the specified layer ids and print a summary after decode",
+        [](common_params & params, const std::string & value) {
+            params.layer_outputs = string_split<int32_t>(value, ',');
+        }
+    ).set_examples({LLAMA_EXAMPLE_COMPLETION, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_DEBUG}));
+    add_opt(common_arg(
         {"--warmup"},
         {"--no-warmup"},
         string_format("whether to perform warmup with an empty run (default: %s)", params.warmup ? "enabled" : "disabled"),

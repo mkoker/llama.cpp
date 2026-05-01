@@ -483,6 +483,7 @@ struct common_params {
     std::string input_prefix         = ""; // string to prefix user inputs with                             // NOLINT
     std::string input_suffix         = ""; // string to suffix user inputs with                             // NOLINT
     std::string logits_file          = ""; // file for saving *all* logits                                  // NOLINT
+    std::vector<int32_t> layer_outputs; // target layer ids whose hidden states should be captured              // NOLINT
 
     // llama-debug specific options
     std::string logits_output_dir = "data"; // directory for saving logits output files                     // NOLINT

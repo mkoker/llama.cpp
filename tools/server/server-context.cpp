@@ -2786,6 +2786,17 @@ private:
 
             metrics.on_decoded(slots);
 
+            if (ret == 0 && !params_base.layer_outputs.empty()) {
+                for (const int32_t layer_id : params_base.layer_outputs) {
+                    size_t n_tokens_layer = 0;
+                    size_t n_embd_layer = 0;
+                    const float * data = llama_get_layer_outputs(ctx, layer_id, &n_tokens_layer, &n_embd_layer);
+                    if (data != nullptr) {
+                        fprintf(stderr, "layer_%d n_tokens=%zu n_embd=%zu first=%g\n", layer_id, n_tokens_layer, n_embd_layer, (double) data[0]);
+                    }
+                }
+            }
+
             if (ret != 0) {
                 {
                     std::string err;

@@ -1873,6 +1873,29 @@ int llama_context::decode(const llama_batch & batch_inp) {
             }
         }
 
+        // extract requested intermediate layer outputs
+        if (!layer_output_ids.empty()) {
+            for (const int32_t layer_id : layer_output_ids) {
+                auto it_tensor = res->t_layer_outputs.find(layer_id);
+                auto it_output = layer_outputs.find(layer_id);
+                if (it_tensor == res->t_layer_outputs.end() || it_tensor->second == nullptr || it_output == layer_outputs.end()) {
+                    continue;
+                }
+
+                ggml_tensor * t_layer = it_tensor->second;
+                ggml_backend_t backend_layer = ggml_backend_sched_get_tensor_backend(sched.get(), t_layer);
+                GGML_ASSERT(backend_layer != nullptr);
+
+                layer_output & out = it_output->second;
+                const size_t n_floats = ggml_nelements(t_layer);
+                out.data.resize(n_floats);
+                out.n_embd   = t_layer->ne[0];
+                out.n_tokens = n_floats / out.n_embd;
+
+                ggml_backend_tensor_get_async(backend_layer, t_layer, out.data.data(), 0, n_floats*sizeof(float));
+            }
+        }
+
         // Copy backend sampling output if this ubatch produced any sampling tensors.
         if (has_samplers && (!res->t_sampled.empty() || !res->t_sampled_probs.empty() || !res->t_sampled_logits.empty())) {
             const auto seq_to_output_row = build_seq_to_output_row(ubatch, n_outputs_prev);
@@ -2227,6 +2250,7 @@ llm_graph_params llama_context::graph_params(
         /*.mctx        =*/ mctx,
         /*.cross       =*/ &cross,
         /*.samplers    =*/ sampling.samplers,
+        /*.layer_output_ids =*/ layer_output_ids,
         /*.n_outputs   =*/ n_outputs,
         /*.cb          =*/ graph_get_cb(),
         /*.res         =*/ res,
