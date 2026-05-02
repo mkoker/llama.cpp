@@ -787,6 +787,34 @@ LLM_TN_IMPL::LLM_TN_IMPL(llm_arch arch, llm_tensor tensor, const char * suffix, 
     : arch(arch), tensor(tensor), suffix(suffix), bid(bid), xid(xid) {}
 
 std::string LLM_TN_IMPL::str() const {
+    if (arch == LLM_ARCH_DFLASH_DRAFT) {
+        auto with_suffix = [&](std::string name) {
+            if (suffix != nullptr) {
+                name += ".";
+                name += suffix;
+            }
+            return name;
+        };
+
+        switch (tensor) {
+            case LLM_TENSOR_CLS_NORM:        return with_suffix("dflash.hidden_norm");
+            case LLM_TENSOR_OUTPUT_NORM:     return with_suffix("dflash.norm");
+            case LLM_TENSOR_CLS:             return with_suffix("dflash.fc");
+            case LLM_TENSOR_ATTN_NORM:       return with_suffix(::format("dflash.layers.%d.input_layernorm", bid));
+            case LLM_TENSOR_FFN_NORM:        return with_suffix(::format("dflash.layers.%d.post_attention_layernorm", bid));
+            case LLM_TENSOR_ATTN_Q:          return with_suffix(::format("dflash.layers.%d.self_attn.q_proj", bid));
+            case LLM_TENSOR_ATTN_K:          return with_suffix(::format("dflash.layers.%d.self_attn.k_proj", bid));
+            case LLM_TENSOR_ATTN_V:          return with_suffix(::format("dflash.layers.%d.self_attn.v_proj", bid));
+            case LLM_TENSOR_ATTN_OUT:        return with_suffix(::format("dflash.layers.%d.self_attn.o_proj", bid));
+            case LLM_TENSOR_ATTN_Q_NORM:     return with_suffix(::format("dflash.layers.%d.self_attn.q_norm", bid));
+            case LLM_TENSOR_ATTN_K_NORM:     return with_suffix(::format("dflash.layers.%d.self_attn.k_norm", bid));
+            case LLM_TENSOR_FFN_GATE:        return with_suffix(::format("dflash.layers.%d.mlp.gate_proj", bid));
+            case LLM_TENSOR_FFN_UP:          return with_suffix(::format("dflash.layers.%d.mlp.up_proj", bid));
+            case LLM_TENSOR_FFN_DOWN:        return with_suffix(::format("dflash.layers.%d.mlp.down_proj", bid));
+            default: break;
+        }
+    }
+
     if (LLM_TENSOR_NAMES.find(tensor) == LLM_TENSOR_NAMES.end()) {
         GGML_ABORT("unknown tensor name for tensor id %d", static_cast<int>(tensor));
     }

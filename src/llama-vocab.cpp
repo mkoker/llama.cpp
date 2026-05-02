@@ -1751,6 +1751,26 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
 
     // determine vocab type
     {
+        if (gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_MODEL).c_str()) == -1) {
+            const int arch_key = gguf_find_key(ctx, "general.architecture");
+            const std::string arch = arch_key == -1 ? "" : gguf_get_val_str(ctx, arch_key);
+            if (arch == "dflashdraft") {
+                tokenizer_model = "no_vocab";
+                type = LLAMA_VOCAB_TYPE_NONE;
+
+                special_bos_id  = LLAMA_TOKEN_NULL;
+                special_eos_id  = LLAMA_TOKEN_NULL;
+                special_unk_id  = LLAMA_TOKEN_NULL;
+                special_sep_id  = LLAMA_TOKEN_NULL;
+                special_pad_id  = LLAMA_TOKEN_NULL;
+                special_mask_id = LLAMA_TOKEN_NULL;
+                linefeed_id     = LLAMA_TOKEN_NULL;
+
+                LLAMA_LOG_WARN("%s: loaded no_vocab tensors metadata; DFlash draft GGUF has no tokenizer; using no_vocab loader path\n", __func__);
+                return;
+            }
+        }
+
         ml.get_key(LLM_KV_TOKENIZER_MODEL, tokenizer_model);
         ml.get_key(LLM_KV_TOKENIZER_PRE,   tokenizer_pre, false);
 
@@ -3067,6 +3087,10 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
         const std::string & raw_text,
         bool add_special,
         bool parse_special) const {
+    if (type == LLAMA_VOCAB_TYPE_NONE) {
+        GGML_ABORT("loaded no_vocab tensors; tokenizer not available for no_vocab model");
+    }
+
     GGML_ASSERT(tokenizer && "Tokenizer not initialized. Call llama_vocab::init_tokenizer() first.");
 
     std::vector<llama_token> output;

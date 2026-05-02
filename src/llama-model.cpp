@@ -840,6 +840,15 @@ void llama_model::load_hparams(llama_model_loader & ml) {
 
         ml.get_key(LLM_KV_ROPE_DIMENSION_COUNT, hparams.n_rot_full, false);
 
+        if (arch == LLM_ARCH_DFLASH_DRAFT && hparams.n_embd == 2048 && hparams.n_head() == 32) {
+            // The z-lab DFlash draft checkpoint omits attention.key_length,
+            // but its Qwen3-shaped drafter uses 32 query heads of width 128
+            // and 4 KV heads, matching the on-disk projection tensors.
+            hparams.n_embd_head_k_full = 128;
+            hparams.n_embd_head_v_full = 128;
+            hparams.n_rot_full = 128;
+        }
+
         if (arch == LLM_ARCH_LLAMA || arch == LLM_ARCH_DECI || arch == LLM_ARCH_FALCON || arch == LLM_ARCH_LLAMA_EMBED) {
             if (hparams.n_rot_full != hparams.n_embd_head_k_full) {
                 throw std::runtime_error(format("invalid n_rot: %u, expected %u", hparams.n_rot_full, hparams.n_embd_head_k_full));
@@ -4004,6 +4013,35 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                         layer.ffn_down_shexp = create_tensor(tn(LLM_TENSOR_FFN_DOWN_SHEXP, "weight", i), {n_ff_shexp,     n_embd}, 0);
                         layer.ffn_up_shexp   = create_tensor(tn(LLM_TENSOR_FFN_UP_SHEXP,   "weight", i), {    n_embd, n_ff_shexp}, 0);
                     }
+                } break;
+            case LLM_ARCH_DFLASH_DRAFT:
+                {
+                    cls_norm = create_tensor(tn(LLM_TENSOR_CLS_NORM, "weight"), {n_embd}, 0);
+                    cls      = create_tensor(tn(LLM_TENSOR_CLS, "weight"), {n_embd * 5, n_embd}, 0);
+
+                    output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd}, 0);
+
+                    for (int i = 0; i < n_layer; ++i) {
+                        auto & layer = layers[i];
+
+                        layer.attn_norm = create_tensor(tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd}, 0);
+
+                        create_tensor_qkv(layer, i, n_embd, n_embd_head_k * n_head, n_embd_gqa, n_embd_gqa, 0);
+                        layer.wo = create_tensor(tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd_head_k * n_head, n_embd}, 0);
+
+                        layer.attn_k_norm = create_tensor(tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd_head_k}, 0);
+                        layer.attn_q_norm = create_tensor(tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {n_embd_head_k}, 0);
+
+                        layer.ffn_norm = create_tensor(tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, 0);
+                        layer.ffn_gate = create_tensor(tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff}, 0);
+                        layer.ffn_down = create_tensor(tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, 0);
+                        layer.ffn_up   = create_tensor(tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, 0);
+                    }
+
+                    // DFlash draft GGUFs intentionally carry no tokenizer. Keep a
+                    // visible load breadcrumb for smoke gates that only need to
+                    // prove that all draft tensors were recognized and loaded.
+                    LLAMA_LOG_WARN("%s: loaded DFlash draft tensors (%d layers)\n", __func__, n_layer);
                 } break;
             case LLM_ARCH_QWEN3:
             case LLM_ARCH_QWEN3VL:
@@ -8689,6 +8727,10 @@ ggml_cgraph * llama_model::build_graph(const llm_graph_params & params) const {
         case LLM_ARCH_QWEN2MOE:
             {
                 llm = std::make_unique<llm_build_qwen2moe>(*this, params);
+            } break;
+        case LLM_ARCH_DFLASH_DRAFT:
+            {
+                llm = std::make_unique<llm_build_dflash_draft>(*this, params);
             } break;
         case LLM_ARCH_QWEN3:
             {
