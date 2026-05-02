@@ -1356,6 +1356,17 @@ void llama_model::load_hparams(llama_model_loader & ml) {
                     default: type = LLM_TYPE_UNKNOWN;
                 }
             } break;
+        case LLM_ARCH_DFLASH_DRAFT:
+            {
+                // DFlash draft models are compact Qwen3-shaped diffusion drafters.
+                // Follow-up tasks add the graph builder and target-hidden KV prefix.
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+                switch (hparams.n_layer) {
+                    case 8: type = LLM_TYPE_0_5B; break;
+                    default: type = LLM_TYPE_UNKNOWN;
+                }
+                hparams.causal_attn = false;
+            } break;
         case LLM_ARCH_MAINCODER:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
@@ -9317,6 +9328,7 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
         case LLM_ARCH_PANGU_EMBED:
         case LLM_ARCH_AFMOE:
         case LLM_ARCH_QWEN3NEXT:
+        case LLM_ARCH_DFLASH_DRAFT:
         case LLM_ARCH_MIMO2:
         case LLM_ARCH_STEP35:
             return LLAMA_ROPE_TYPE_NEOX;
