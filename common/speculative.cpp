@@ -1142,6 +1142,25 @@ void common_speculative_begin(common_speculative * spec, const llama_tokens & pr
     }
 }
 
+
+llama_tokens common_speculative_block_draft(
+        common_speculative * spec,
+        const common_params_speculative & params,
+        const llama_tokens & prompt_tgt,
+        llama_token id_last,
+        int32_t block_size) {
+    if (block_size <= 0) {
+        return {};
+    }
+
+    llama_tokens result = common_speculative_draft(spec, params, prompt_tgt, id_last);
+    if ((int32_t) result.size() > block_size) {
+        result.resize(block_size);
+    }
+
+    return result;
+}
+
 llama_tokens common_speculative_draft(
         common_speculative * spec,
         const common_params_speculative & params,

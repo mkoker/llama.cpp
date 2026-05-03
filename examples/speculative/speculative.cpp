@@ -182,8 +182,12 @@ int main(int argc, char ** argv) {
     // the 2 models should have the same vocab
     //GGML_ASSERT(n_vocab == llama_vocab_n_tokens(model_dft));
 
-    // how many tokens to draft each time
+    // DFlash/block speculative decoding proposes a fixed-size block per drafter pass.
     int n_draft = params.speculative.draft.n_max;
+    if (n_draft <= 0) {
+        LOG_ERR("%s: --spec-draft-n-max/--draft must be > 0\n", __func__);
+        return 1;
+    }
 
     int n_predict = 0;
     int n_drafted = 0;
@@ -481,7 +485,7 @@ int main(int argc, char ** argv) {
         common_batch_clear(batch_tgt);
         common_batch_add  (batch_tgt, drafts[0].tokens[0], n_past_tgt, { 0 }, true);
 
-        // sample n_draft tokens from the draft model using tree-based sampling
+        // sample one fixed-size block from the draft model; n_seq_dft > 1 keeps the legacy tree branches
         for (int i = 0; i < n_draft; ++i) {
             batch_dft.n_tokens = 0;
 
@@ -623,6 +627,7 @@ int main(int argc, char ** argv) {
     LOG_INF("\n");
     LOG_INF("n_draft   = %d\n", n_draft);
     LOG_INF("n_predict = %d\n", n_predict);
+    LOG_INF("n_decoded = %d\n", n_predict);
     LOG_INF("n_drafted = %d\n", n_drafted);
     LOG_INF("n_accept  = %d\n", n_accept);
     LOG_INF("accept    = %.3f%%\n", 100.0f * n_accept / n_drafted);
