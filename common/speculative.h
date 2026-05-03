@@ -30,6 +30,15 @@ llama_tokens common_speculative_draft(
                      const llama_tokens & prompt,
                             llama_token   id_last);
 
+// DFlash/block-draft interface: use llama_speculative_block_draft() semantics
+// to propose up to one fixed-size block per drafter pass.
+llama_tokens common_speculative_block_draft(
+                     common_speculative * spec,
+        const common_params_speculative & params,
+                     const llama_tokens & prompt,
+                            llama_token   id_last,
+                               int32_t   block_size);
+
 // informs the speculative decoder that n_accepted tokens were accepted by the target model
 void common_speculative_accept(common_speculative * spec, uint16_t n_accepted);
 

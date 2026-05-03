@@ -1021,6 +1021,31 @@ extern "C" {
     // Layout is row-major [n_tokens][n_embd]. Returns NULL if unavailable.
     LLAMA_API const float * llama_get_layer_outputs(struct llama_context * ctx, int32_t layer_id, size_t * n_tokens, size_t * n_embd);
 
+    // Parameters for block speculative drafting (DFlash-style).
+    // The target context is expected to have captured layer outputs via llama_set_layer_outputs().
+    // block_size is the number of draft tokens proposed per drafter pass (DFlash uses 16).
+    // mask_token_id is the drafter mask token used to fill the block before prediction.
+    struct llama_speculative_block_draft_params {
+        int32_t block_size;
+        llama_token mask_token_id;
+
+        const int32_t * target_layer_ids;
+        size_t          n_target_layer_ids;
+    };
+
+    // Draft up to n_draft_tokens tokens with a block speculative drafter.
+    // prompt_tokens are target-vocabulary tokens ending before id_last.
+    // Returns the number of tokens written to draft_tokens, or a negative error code.
+    LLAMA_API int32_t llama_speculative_block_draft(
+            struct llama_context * ctx_tgt,
+            struct llama_context * ctx_dft,
+            const struct llama_speculative_block_draft_params * params,
+            const llama_token * prompt_tokens,
+            size_t n_prompt_tokens,
+            llama_token id_last,
+            llama_token * draft_tokens,
+            size_t n_draft_tokens);
+
     //
     // backend sampling API [EXPERIMENTAL]
     // note: use only if the llama_context was created with at least one llama_sampler_seq_config
