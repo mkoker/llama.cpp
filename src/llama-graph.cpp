@@ -1948,6 +1948,8 @@ ggml_tensor * llm_graph_context::build_pos_bias(ggml_tensor * pos_bucket, ggml_t
     return pos_bias;
 }
 
+// Supports callers that pass K/V with an already-concatenated kv_prefix
+// in the token dimension (used by DFlash target-hidden injection).
 ggml_tensor * llm_graph_context::build_attn_mha(
          ggml_tensor * q,
          ggml_tensor * k,
