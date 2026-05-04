@@ -99,9 +99,10 @@ ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_
 
     for (int i = 0; i < n_slots; i++) {
         cache->slots[i].data       = (char *)pool + (size_t)i * slot_size_bytes;
-        cache->slots[i].occupied   = false;
-        cache->slots[i].tensor_ptr = nullptr;
-        cache->slots[i].expert_idx = -1;
+        cache->slots[i].occupied         = false;
+        cache->slots[i].tensor_ptr       = nullptr;
+        cache->slots[i].materialized_dst = nullptr;
+        cache->slots[i].expert_idx       = -1;
         cache->slots[i].size       = 0;
         cache->slots[i].prev       = i - 1;
         cache->slots[i].next       = (i + 1 < n_slots) ? i + 1 : -1;
@@ -183,10 +184,18 @@ bool ggml_expert_cache_copy_hits(
 
     std::lock_guard<std::mutex> lock(cache->mtx);
 
-    std::vector<int> hit_slots;
-    hit_slots.reserve((size_t) n_expert);
+    // Avoid heap churn in the token-hot path. Qwen/Mixtral MoE tensors are well below this.
+    constexpr int max_stack_experts = 512;
+    int hit_slots_stack[max_stack_experts];
+    std::vector<int> hit_slots_heap;
+    int * hit_slots = hit_slots_stack;
+    if (n_expert > max_stack_experts) {
+        hit_slots_heap.resize((size_t) n_expert);
+        hit_slots = hit_slots_heap.data();
+    }
 
     // preflight: only take the D2D path when all required experts are present
+    int64_t n_hits = 0;
     for (int64_t id = 0; id < n_expert; ++id) {
         if (!ggml_bitset_get(used, id)) {
             continue;
@@ -199,7 +208,7 @@ bool ggml_expert_cache_copy_hits(
             return false;
         }
 
-        hit_slots.push_back(it->second);
+        hit_slots[n_hits++] = it->second;
     }
 
     int64_t hit_i = 0;
@@ -208,20 +217,29 @@ bool ggml_expert_cache_copy_hits(
             continue;
         }
 
-        const int idx = hit_slots[(size_t) hit_i++];
+        const int idx = hit_slots[hit_i++];
         cache->hits++;
-        lru_unlink(cache, idx);
-        lru_push_front(cache, idx);
 
-        CUDA_CHECK(cudaMemcpyAsync(
-            (char *) dst_data + id * (int64_t) expert_size,
-            cache->slots[idx].data,
-            expert_size,
-            cudaMemcpyDeviceToDevice,
-            stream));
+        // LRU promotion is useful under pressure, but it is pure CPU overhead for the
+        // Tier-1 steady-state cache where all offloaded expert tensors fit. Keep exact
+        // LRU behavior for small caches and avoid thousands of linked-list mutations
+        // per 128-token run for large caches.
+        if (cache->n_slots < 4096) {
+            lru_unlink(cache, idx);
+            lru_push_front(cache, idx);
+        }
 
-        cache->d2d_copies += 1;
-        cache->d2d_bytes  += (int64_t) expert_size;
+        if (cache->slots[idx].materialized_dst != dst_data) {
+            CUDA_CHECK(cudaMemcpyAsync(
+                (char *) dst_data + id * (int64_t) expert_size,
+                cache->slots[idx].data,
+                expert_size,
+                cudaMemcpyDeviceToDevice,
+                stream));
+            cache->slots[idx].materialized_dst = dst_data;
+            cache->d2d_copies += 1;
+            cache->d2d_bytes  += (int64_t) expert_size;
+        }
         cache->skipped_h2d_due_to_hit += 1;
     }
 
@@ -287,12 +305,30 @@ void * ggml_expert_cache_get(
 
     slot.key        = key;
     slot.occupied   = true;
-    slot.tensor_ptr = (void *) key_base.source_tensor_id;
-    slot.expert_idx = expert_idx;
-    slot.size       = expert_size;
+    slot.tensor_ptr       = (void *) key_base.source_tensor_id;
+    slot.materialized_dst = nullptr;
+    slot.expert_idx       = expert_idx;
+    slot.size             = expert_size;
 
     cache->slot_map[key] = victim;
 
     return slot.data;
 }
+
+void ggml_expert_cache_mark_materialized(
+        ggml_expert_cache *               cache,
+        const ggml_expert_cache_key_base & key_base,
+        int64_t                           expert_idx,
+        void *                            dst_data) {
+    GGML_ASSERT(cache != nullptr);
+
+    std::lock_guard<std::mutex> lock(cache->mtx);
+
+    ggml_expert_cache_key key{key_base, expert_idx};
+    auto it = cache->slot_map.find(key);
+    if (it != cache->slot_map.end()) {
+        cache->slots[it->second].materialized_dst = dst_data;
+    }
+}
+
 

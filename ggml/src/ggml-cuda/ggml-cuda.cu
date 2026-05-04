@@ -741,7 +741,7 @@ static bool ggml_backend_cuda_expert_cache_copy(
             prefetched_tensor = true;
             for (int64_t pre_id = 0; pre_id < n_expert; ++pre_id) {
                 const void * pre_src_host = (const uint8_t *) input_data + pre_id * (int64_t) expert_size;
-                (void) ggml_expert_cache_get(
+                void * pre_src_dev = ggml_expert_cache_get(
                     ctx->expert_cache,
                     *key_base,
                     pre_id,
@@ -750,6 +750,13 @@ static bool ggml_backend_cuda_expert_cache_copy(
                     stream,
                     nullptr,
                     true);
+                CUDA_CHECK(cudaMemcpyAsync(
+                    (uint8_t *) input_cpy->data + pre_id * (int64_t) expert_size,
+                    pre_src_dev,
+                    expert_size,
+                    cudaMemcpyDeviceToDevice,
+                    stream));
+                ggml_expert_cache_mark_materialized(ctx->expert_cache, *key_base, pre_id, input_cpy->data);
             }
         }
 
@@ -759,6 +766,7 @@ static bool ggml_backend_cuda_expert_cache_copy(
             expert_size,
             cudaMemcpyDeviceToDevice,
             stream));
+        ggml_expert_cache_mark_materialized(ctx->expert_cache, *key_base, id, input_cpy->data);
 
         ctx->expert_cache->d2d_copies += 1;
         ctx->expert_cache->d2d_bytes  += (int64_t) expert_size;

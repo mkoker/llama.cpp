@@ -69,8 +69,9 @@ struct ggml_expert_cache_slot {
     void *                data;       // GPU memory for this slot
     ggml_expert_cache_key key;        // cache key currently occupying this slot
     bool                  occupied;   // false = empty slot
-    void *                tensor_ptr; // retained for diagnostics / legacy stats
-    int64_t               expert_idx; // which expert index within that tensor
+    void *                tensor_ptr;       // retained for diagnostics / legacy stats
+    void *                materialized_dst; // dst tensor base already populated from this cache slot
+    int64_t               expert_idx;       // which expert index within that tensor
     size_t                size;       // actual bytes used in this slot (may be < slot_size)
 
     // intrusive doubly-linked list for LRU
@@ -132,3 +133,9 @@ void * ggml_expert_cache_get(
     cudaStream_t                      stream,
     bool *                            was_hit = nullptr,
     bool                              count_h2d = true);
+
+void ggml_expert_cache_mark_materialized(
+    ggml_expert_cache *               cache,
+    const ggml_expert_cache_key_base & key_base,
+    int64_t                           expert_idx,
+    void *                            dst_data);
