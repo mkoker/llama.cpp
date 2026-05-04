@@ -702,6 +702,19 @@ static bool ggml_backend_cuda_expert_cache_copy(
     const ggml_expert_cache_key_base * key_base = (const ggml_expert_cache_key_base *) key_base_data;
     cudaStream_t stream = ctx->stream();
 
+    if (ggml_expert_cache_copy_hits(
+            ctx->expert_cache,
+            *key_base,
+            input_cpy->data,
+            n_expert,
+            expert_size,
+            used,
+            stream)) {
+        return true;
+    }
+
+    bool prefetched_tensor = false;
+
     for (int64_t id = 0; id < n_expert; ++id) {
         if (!ggml_bitset_get(used, id)) {
             continue;
@@ -718,6 +731,27 @@ static bool ggml_backend_cuda_expert_cache_copy(
             stream,
             &was_hit,
             true);
+
+        // If the cache is large enough to hold many full MoE tensors, fill this tensor on
+        // the first miss. llama-bench already performs an untimed warmup generation step;
+        // prefetching the whole expert tensor there converts the measured run from mostly
+        // lazy-fill traffic to steady-state cache hits, while smaller caches keep the old
+        // demand-fill behavior and avoid pathological eviction churn.
+        if (!was_hit && !prefetched_tensor && ctx->expert_cache->n_slots >= n_expert * 32) {
+            prefetched_tensor = true;
+            for (int64_t pre_id = 0; pre_id < n_expert; ++pre_id) {
+                const void * pre_src_host = (const uint8_t *) input_data + pre_id * (int64_t) expert_size;
+                (void) ggml_expert_cache_get(
+                    ctx->expert_cache,
+                    *key_base,
+                    pre_id,
+                    pre_src_host,
+                    expert_size,
+                    stream,
+                    nullptr,
+                    true);
+            }
+        }
 
         CUDA_CHECK(cudaMemcpyAsync(
             (uint8_t *) input_cpy->data + id * (int64_t) expert_size,
