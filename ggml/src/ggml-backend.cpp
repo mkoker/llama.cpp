@@ -761,6 +761,11 @@ static bool ggml_is_view_op(enum ggml_op op) {
 #define GGML_SCHED_MAX_COPIES 4
 #endif
 
+typedef bool (*ggml_backend_sched_expert_cache_copy_fn_t)(
+    ggml_backend_t, ggml_tensor *, const void *, int64_t, size_t, const ggml_bitset_t *, size_t, const void *, size_t);
+typedef void (*ggml_backend_sched_expert_cache_insert_fn_t)(
+    ggml_backend_t, ggml_tensor *, int64_t, size_t, const ggml_bitset_t *, size_t, const void *, size_t);
+
 struct ggml_backend_sched_split {
     int backend_id;
     int i_start;
@@ -779,6 +784,8 @@ struct ggml_backend_sched {
 
     ggml_backend_t backends[GGML_SCHED_MAX_BACKENDS];
     ggml_backend_buffer_type_t bufts[GGML_SCHED_MAX_BACKENDS];
+    ggml_backend_sched_expert_cache_copy_fn_t expert_cache_copy_fns[GGML_SCHED_MAX_BACKENDS];
+    ggml_backend_sched_expert_cache_insert_fn_t expert_cache_insert_fns[GGML_SCHED_MAX_BACKENDS];
     ggml_gallocr_t galloc;
 
     // hash map of the nodes in the graph
@@ -1694,21 +1701,20 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                         prev_ids_tensor = ids_tensor;
                     }
 
-                    // Try expert cache first (persistent GPU cache avoids redundant H2D copies)
-                    typedef bool (*expert_cache_copy_fn_t)(ggml_backend_t, ggml_tensor *, const void *, int64_t, size_t, const ggml_bitset_t *, size_t, const void *, size_t);
-                    typedef void (*expert_cache_insert_fn_t)(ggml_backend_t, ggml_tensor *, int64_t, size_t, const ggml_bitset_t *, size_t, const void *, size_t);
-                    auto * dev = ggml_backend_get_device(split_backend);
-                    auto * reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
-                    expert_cache_copy_fn_t cache_copy_fn = reg ?
-                        (expert_cache_copy_fn_t)ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_expert_cache_copy") : nullptr;
-                    expert_cache_insert_fn_t cache_insert_fn = reg ?
-                        (expert_cache_insert_fn_t)ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_expert_cache_insert") : nullptr;
-
-                    const ggml_sched_expert_cache_key_base key_base = ggml_sched_expert_cache_make_key_base(input, input_cpy, split_backend_id, expert_size);
+                    // Try expert cache first (persistent GPU cache avoids redundant H2D copies).
+                    // Backend proc-address lookups are cached at scheduler construction; this path runs once per
+                    // copied MoE tensor, so avoid registry lookups and key construction unless a backend supports it.
+                    ggml_backend_sched_expert_cache_copy_fn_t cache_copy_fn = sched->expert_cache_copy_fns[split_backend_id];
+                    ggml_backend_sched_expert_cache_insert_fn_t cache_insert_fn = sched->expert_cache_insert_fns[split_backend_id];
 
                     bool cache_handled = false;
-                    if (cache_copy_fn) {
-                        cache_handled = cache_copy_fn(split_backend, input_cpy, input->data, n_expert, expert_size, used_ids.data(), used_ids.size(), (const void *) &key_base, sizeof(key_base));
+                    ggml_sched_expert_cache_key_base key_base;
+                    const bool cache_available = cache_copy_fn || cache_insert_fn;
+                    if (cache_available) {
+                        key_base = ggml_sched_expert_cache_make_key_base(input, input_cpy, split_backend_id, expert_size);
+                        if (cache_copy_fn) {
+                            cache_handled = cache_copy_fn(split_backend, input_cpy, input->data, n_expert, expert_size, used_ids.data(), used_ids.size(), (const void *) &key_base, sizeof(key_base));
+                        }
                     }
 
                     if (!cache_handled) {
@@ -1872,6 +1878,13 @@ ggml_backend_sched_t ggml_backend_sched_new(
         sched->backends[b] = backends[b];
         sched->bufts[b] = bufts ? bufts[b] : ggml_backend_get_default_buffer_type(backends[b]);
         GGML_ASSERT(ggml_backend_supports_buft(backends[b], sched->bufts[b]));
+
+        auto * dev = ggml_backend_get_device(backends[b]);
+        auto * reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
+        sched->expert_cache_copy_fns[b] = reg ?
+            (ggml_backend_sched_expert_cache_copy_fn_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_expert_cache_copy") : nullptr;
+        sched->expert_cache_insert_fns[b] = reg ?
+            (ggml_backend_sched_expert_cache_insert_fn_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_expert_cache_insert") : nullptr;
 
         if (sched->n_copies > 1) {
             for (int c = 0; c < sched->n_copies; c++) {

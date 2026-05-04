@@ -5,17 +5,6 @@
 #include <unordered_map>
 #include <mutex>
 
-struct ggml_expert_cache_slot {
-    void *   data;         // GPU memory for this slot
-    void *   tensor_ptr;   // which src0 tensor this caches (nullptr = empty)
-    int64_t  expert_idx;   // which expert index within that tensor
-    size_t   size;         // actual bytes used in this slot (may be < slot_size)
-
-    // intrusive doubly-linked list for LRU
-    int prev;  // index of previous slot in LRU order (-1 = head)
-    int next;  // index of next slot in LRU order (-1 = tail)
-};
-
 // Scheduler-derived cache-key context (deterministic across lookup/insert):
 // - source_tensor_id: source tensor identity at scheduler boundary (canonical base tensor)
 // - backend_id: scheduler split backend id / device route
@@ -74,6 +63,19 @@ struct ggml_expert_cache_key_hash {
 
         return h;
     }
+};
+
+struct ggml_expert_cache_slot {
+    void *                data;       // GPU memory for this slot
+    ggml_expert_cache_key key;        // cache key currently occupying this slot
+    bool                  occupied;   // false = empty slot
+    void *                tensor_ptr; // retained for diagnostics / legacy stats
+    int64_t               expert_idx; // which expert index within that tensor
+    size_t                size;       // actual bytes used in this slot (may be < slot_size)
+
+    // intrusive doubly-linked list for LRU
+    int prev;  // index of previous slot in LRU order (-1 = head)
+    int next;  // index of next slot in LRU order (-1 = tail)
 };
 
 struct ggml_expert_cache {

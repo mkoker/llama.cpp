@@ -99,12 +99,15 @@ ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_
 
     for (int i = 0; i < n_slots; i++) {
         cache->slots[i].data       = (char *)pool + (size_t)i * slot_size_bytes;
+        cache->slots[i].occupied   = false;
         cache->slots[i].tensor_ptr = nullptr;
         cache->slots[i].expert_idx = -1;
         cache->slots[i].size       = 0;
         cache->slots[i].prev       = i - 1;
         cache->slots[i].next       = (i + 1 < n_slots) ? i + 1 : -1;
     }
+
+    cache->slot_map.reserve((size_t) n_slots);
 
     GGML_LOG_INFO("%s: expert cache arena initialized on device %d — %d slots, %.1f MiB total\n",
                   __func__, device, n_slots, (double)pool_bytes / (1024.0 * 1024.0));
@@ -266,13 +269,8 @@ void * ggml_expert_cache_get(
 
     ggml_expert_cache_slot & slot = cache->slots[victim];
 
-    if (slot.tensor_ptr != nullptr) {
-        for (auto old = cache->slot_map.begin(); old != cache->slot_map.end(); ++old) {
-            if (old->second == victim) {
-                cache->slot_map.erase(old);
-                break;
-            }
-        }
+    if (slot.occupied) {
+        cache->slot_map.erase(slot.key);
     }
 
     lru_unlink(cache, victim);
@@ -287,6 +285,8 @@ void * ggml_expert_cache_get(
         cache->d2d_bytes  += (int64_t) expert_size;
     }
 
+    slot.key        = key;
+    slot.occupied   = true;
     slot.tensor_ptr = (void *) key_base.source_tensor_id;
     slot.expert_idx = expert_idx;
     slot.size       = expert_size;
