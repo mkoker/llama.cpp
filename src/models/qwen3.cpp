@@ -129,7 +129,7 @@ llm_build_dflash_draft::llm_build_dflash_draft(const llama_model & model, const 
     res->t_inp_embd = inpL;
 
     ggml_tensor * target_hidden = nullptr;
-    if (cross != nullptr) {
+    if (cross != nullptr && !cross->v_embd.empty()) {
         target_hidden = build_inp_cross_embd();
     } else {
         // Smoke paths that only load/build a standalone drafter do not yet pass

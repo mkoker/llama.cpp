@@ -104,23 +104,25 @@ int main(int argc, char ** argv) {
     const bool vocab_type_dft = llama_vocab_type(vocab_dft);
     LOG_DBG("vocab_type dft: %d\n", vocab_type_dft);
 
-    if (vocab_type_tgt != vocab_type_dft) {
+    const bool dflash_no_vocab_dft = llama_vocab_n_tokens(vocab_dft) == 0;
+
+    if (!dflash_no_vocab_dft && vocab_type_tgt != vocab_type_dft) {
         LOG_ERR("%s: draft model vocab type must match target model to use speculation but ", __func__);
         LOG_ERR("vocab_type_dft = %d while vocab_type_tgt = %d\n", vocab_type_dft, vocab_type_tgt);
         return 1;
     }
 
-    if (
+    if (!dflash_no_vocab_dft && (
         llama_vocab_get_add_bos(vocab_tgt) != llama_vocab_get_add_bos(vocab_dft) ||
         llama_vocab_get_add_eos(vocab_tgt) != llama_vocab_get_add_eos(vocab_dft) ||
         llama_vocab_bos(vocab_tgt) != llama_vocab_bos(vocab_dft) ||
         llama_vocab_eos(vocab_tgt) != llama_vocab_eos(vocab_dft)
-    ) {
+    )) {
         LOG_ERR("%s: draft model special tokens must match target model to use speculation\n", __func__);
         return 1;
     }
 
-    {
+    if (!dflash_no_vocab_dft) {
         const int n_vocab_tgt = llama_vocab_n_tokens(vocab_tgt);
         const int n_vocab_dft = llama_vocab_n_tokens(vocab_dft);
         const int vocab_diff  = n_vocab_tgt > n_vocab_dft
@@ -201,6 +203,52 @@ int main(int argc, char ** argv) {
 
     // target model sampling context (reuse the llama_context's sampling instance)
     struct common_sampler * smpl = common_sampler_init(model_tgt, params.sampling);
+
+
+    if (dflash_no_vocab_dft) {
+        LOG_INF("DFlash no-vocab draft model loaded; running target decode smoke path\n");
+
+        const auto t_dec_start_no_vocab = ggml_time_us();
+        while ((params.n_predict < 0 || n_predict < params.n_predict) && !has_eos) {
+            llama_token token_id = common_sampler_sample(smpl, ctx_tgt, 0);
+            common_sampler_accept(smpl, token_id, true);
+
+            LOG("%s", common_token_to_piece(ctx_tgt, token_id).c_str());
+            ++n_predict;
+
+            if (llama_vocab_is_eog(vocab_tgt, token_id)) {
+                has_eos = true;
+                break;
+            }
+
+            llama_decode(ctx_tgt, llama_batch_get_one(&token_id, 1));
+        }
+        const auto t_dec_end_no_vocab = ggml_time_us();
+
+        LOG("\n\n");
+        LOG_INF("encoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n", n_input,   (t_enc_end - t_enc_start) / 1e6f, inp.size() / ((t_enc_end - t_enc_start) / 1e6f));
+        LOG_INF("decoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n", n_predict, (t_dec_end_no_vocab - t_dec_start_no_vocab) / 1e6f, n_predict  / ((t_dec_end_no_vocab - t_dec_start_no_vocab) / 1e6f));
+        LOG_INF("\n");
+        LOG_INF("n_draft   = %d\n", n_draft);
+        LOG_INF("n_predict = %d\n", n_predict);
+        LOG_INF("n_decoded = %d\n", n_predict);
+        LOG_INF("n_drafted = %d\n", 0);
+        LOG_INF("n_accept  = %d\n", 0);
+        LOG_INF("accept    = %.3f%%\n", 0.0);
+
+        LOG_INF("\n");
+        LOG_INF("draft:\n\n");
+        llama_perf_context_print(ctx_dft);
+
+        LOG_INF("\n");
+        LOG_INF("target:\n\n");
+        common_perf_print(ctx_tgt, smpl);
+
+        common_sampler_free(smpl);
+        llama_backend_free();
+        LOG("\n\n");
+        return 0;
+    }
 
     // draft sequence data
     std::vector<seq_draft> drafts(n_seq_dft);
