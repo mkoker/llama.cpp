@@ -353,6 +353,11 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    if (!params.layer_outputs.empty() && params.n_gpu_layers == -1) {
+        params.n_gpu_layers = 0;
+        fprintf(stderr, "warning: --layer-outputs with automatic --gpu-layers uses CPU weights to avoid VRAM OOM; pass --gpu-layers all or an explicit numeric value to override\n");
+    }
+
     // TODO: maybe support it later?
     if (params.conversation_mode == COMMON_CONVERSATION_MODE_DISABLED) {
         console::error("--no-conversation is not supported by llama-cli\n");
