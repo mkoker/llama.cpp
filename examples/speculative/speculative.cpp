@@ -38,6 +38,11 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    if (params.n_ctx == 0) {
+        params.n_ctx = params.fit_params_min_ctx > 0 ? params.fit_params_min_ctx : 4096;
+        LOG_INF("%s: capping default speculative context to %d tokens to avoid loading the full model-trained context; pass -c/--ctx-size to override\n", __func__, params.n_ctx);
+    }
+
     // max number of parallel drafting sequences (i.e. tree branches)
     const int n_seq_dft = params.n_parallel;
 
@@ -53,9 +58,17 @@ int main(int argc, char ** argv) {
 
     // load the target model
     auto llama_init_tgt = common_init_from_params(params);
+    if (!llama_init_tgt) {
+        LOG_ERR("%s: failed to initialize target model '%s'\n", __func__, params.model.path.c_str());
+        return 1;
+    }
 
     model_tgt = llama_init_tgt->model();
     ctx_tgt   = llama_init_tgt->context();
+    if (!model_tgt || !ctx_tgt) {
+        LOG_ERR("%s: failed to load target model/context '%s'\n", __func__, params.model.path.c_str());
+        return 1;
+    }
 
     // load the draft model
     params.devices = params.speculative.draft.devices;
@@ -67,11 +80,25 @@ int main(int argc, char ** argv) {
 
     params.cpuparams_batch.n_threads = params.speculative.draft.cpuparams_batch.n_threads;
     params.tensor_buft_overrides     = params.speculative.draft.tensor_buft_overrides;
+    if (params.speculative.draft.n_ctx > 0) {
+        params.n_ctx = params.speculative.draft.n_ctx;
+    }
 
+    const bool warmup_tgt = params.warmup;
+    params.warmup = false;
     auto llama_init_dft = common_init_from_params(params);
+    params.warmup = warmup_tgt;
+    if (!llama_init_dft) {
+        LOG_ERR("%s: failed to initialize draft model '%s'\n", __func__, params.model.path.c_str());
+        return 1;
+    }
 
     model_dft = llama_init_dft->model();
     ctx_dft   = llama_init_dft->context();
+    if (!model_dft || !ctx_dft) {
+        LOG_ERR("%s: failed to load draft model/context '%s'\n", __func__, params.model.path.c_str());
+        return 1;
+    }
 
     const llama_vocab * vocab_tgt = llama_model_get_vocab(model_tgt);
     const llama_vocab * vocab_dft = llama_model_get_vocab(model_dft);
