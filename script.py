@@ -181,13 +181,46 @@ class RunningScene(Scene):
         runner = RunningMan(height=3.4).move_to(ORIGIN)
         runner.add_updater(lambda mob: mob.set_angled(phase.get_value()))
 
+        ground_y = -2.05
+        ground_line = Line(LEFT * 7 + DOWN * 2.05, RIGHT * 7 + DOWN * 2.05)
+        ground_line.set_stroke("#DCE8F2", width=4, opacity=0.92)
+        ground_shadow = Line(LEFT * 7 + DOWN * 2.12, RIGHT * 7 + DOWN * 2.12)
+        ground_shadow.set_stroke("#283744", width=7, opacity=0.45)
+
+        horizon = Rectangle(width=14.5, height=2.2)
+        horizon.move_to(DOWN * 2.9)
+        horizon.set_fill("#18202A", opacity=1).set_stroke(width=0)
+
+        speed_lines = VGroup()
+        for y, width, opacity in [(-0.62, 1.25, 0.30), (-0.98, 1.75, 0.22), (-1.36, 1.05, 0.18)]:
+            line = Line(LEFT * (3.4 + width) + UP * y, LEFT * 3.4 + UP * y)
+            line.set_stroke(TRAIL, width=5, opacity=opacity)
+            speed_lines.add(line)
+
         title = Text("Running Man Animation", font_size=34, color=WHITE).to_edge(UP, buff=0.5)
-        ghost = always_redraw(
-            lambda: RunningMan(height=3.4)
-            .set_angled(phase.get_value() - 0.55)
-            .set_opacity(0.18)
-            .set_color(TRAIL)
+        trail = VGroup(
+            always_redraw(
+                lambda: RunningMan(height=3.4)
+                .set_angled(phase.get_value() - 0.42)
+                .shift(LEFT * 0.28)
+                .set_opacity(0.20)
+                .set_color(TRAIL)
+            ),
+            always_redraw(
+                lambda: RunningMan(height=3.4)
+                .set_angled(phase.get_value() - 0.84)
+                .shift(LEFT * 0.58)
+                .set_opacity(0.11)
+                .set_color(TRAIL)
+            ),
         )
-        self.add(title, ghost, runner)
+        foot_spark = always_redraw(
+            lambda: Ellipse(width=0.75, height=0.10)
+            .move_to(RIGHT * 0.05 + UP * (ground_y + 0.06))
+            .set_fill(TRAIL, opacity=0.14 + 0.08 * abs(math.sin(phase.get_value())))
+            .set_stroke(TRAIL, width=1, opacity=0.28)
+        )
+
+        self.add(horizon, speed_lines, ground_shadow, ground_line, title, trail, foot_spark, runner)
         self.play(phase.animate.set_value(TAU * 2), run_time=4.0, rate_func=linear)
         self.wait(0.2)
