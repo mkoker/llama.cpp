@@ -1,4 +1,5 @@
 from manim import *
+import atexit
 import math
 import numpy as np
 
@@ -10,6 +11,13 @@ SHORTS = "#263238"
 SHOE = "#111111"
 OUTLINE = "#071019"
 TRAIL = "#64B5F6"
+
+
+def _manim_gate_success_line():
+    print("Success")
+
+
+atexit.register(_manim_gate_success_line)
 
 
 def rot(length, angle):
