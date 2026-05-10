@@ -1,0 +1,108 @@
+{
+  "summary": {
+    "total_runs": 5,
+    "successes": 5,
+    "failures": 0,
+    "success_rate": 1.0,
+    "total_latency_seconds": 5.88349939789623e-05,
+    "average_latency_seconds": 1.176699879579246e-05,
+    "total_tokens": 349
+  },
+  "results": [
+    {
+      "agent": "mock",
+      "task_id": "web_search_current_ai_news",
+      "task_name": "Web search: current AI news with citations",
+      "model": "benchmark-mock",
+      "output": "- Example AI announcement, ExampleOrg, 2026-05-01, https://example.com/ai-1\n- Example agent SDK announcement, SDKOrg, 2026-05-02, https://example.com/ai-2",
+      "latency_seconds": 9.29197994992137e-06,
+      "usage": {
+        "prompt_tokens": 31,
+        "completion_tokens": 15,
+        "total_tokens": 46
+      },
+      "success": true,
+      "error": null,
+      "metadata": {
+        "iteration": 1,
+        "category": "web_search"
+      }
+    },
+    {
+      "agent": "mock",
+      "task_id": "code_gen_slugify",
+      "task_name": "Code generation: Python slugify helper",
+      "model": "benchmark-mock",
+      "output": "import re\n\ndef slugify(text: str) -> str:\n    return re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')\n\nassert slugify('Hello, World!') == 'hello-world'\nassert slugify(' A  B ') == 'a-b'\nassert slugify('x_y') == 'x-y'",
+      "latency_seconds": 6.532005500048399e-06,
+      "usage": {
+        "prompt_tokens": 33,
+        "completion_tokens": 27,
+        "total_tokens": 60
+      },
+      "success": true,
+      "error": null,
+      "metadata": {
+        "iteration": 1,
+        "category": "code_generation"
+      }
+    },
+    {
+      "agent": "mock",
+      "task_id": "file_read_write_summary",
+      "task_name": "File read/write: transform JSON lines into summary file",
+      "model": "benchmark-mock",
+      "output": "import json\nfrom collections import defaultdict\n\ntotals = defaultdict(int)\nwith open('input/events.jsonl') as f:\n    for line in f:\n        row = json.loads(line)\n        totals[row['team']] += row['score']\nwith open('output/team_scores.json', 'w') as f:\n    json.dump(dict(totals), f, indent=2)",
+      "latency_seconds": 5.963986041024327e-06,
+      "usage": {
+        "prompt_tokens": 39,
+        "completion_tokens": 31,
+        "total_tokens": 70
+      },
+      "success": true,
+      "error": null,
+      "metadata": {
+        "iteration": 1,
+        "category": "file_read_write"
+      }
+    },
+    {
+      "agent": "mock",
+      "task_id": "data_parse_invoice_text",
+      "task_name": "Data parsing: extract invoice fields",
+      "model": "benchmark-mock",
+      "output": "{\"invoice_id\": \"INV-1042\", \"vendor\": \"Northwind Tools\", \"invoice_date\": \"2026-05-01\", \"due_date\": \"2026-05-31\", \"line_items\": [{\"description\": \"Router Bit\", \"quantity\": 3, \"unit_price\": 12.5, \"amount\": 37.5}, {\"description\": \"Safety Goggles\", \"quantity\": 2, \"unit_price\": 18.0, \"amount\": 36.0}], \"subtotal\": 73.5, \"tax\": 4.41, \"total\": 77.91}",
+      "latency_seconds": 3.195501631125808e-05,
+      "usage": {
+        "prompt_tokens": 68,
+        "completion_tokens": 34,
+        "total_tokens": 102
+      },
+      "success": true,
+      "error": null,
+      "metadata": {
+        "iteration": 1,
+        "category": "data_parsing"
+      }
+    },
+    {
+      "agent": "mock",
+      "task_id": "reasoning_project_schedule",
+      "task_name": "Multi-step reasoning: dependency-aware schedule",
+      "model": "benchmark-mock",
+      "output": "A 09:00-11:00 worker 1; B 11:00-14:00 worker 1; C 11:00-12:00 worker 2; E 12:00-14:00 worker 2; D 14:00-18:00 worker 1. Final completion 18:00.",
+      "latency_seconds": 5.092006176710129e-06,
+      "usage": {
+        "prompt_tokens": 48,
+        "completion_tokens": 23,
+        "total_tokens": 71
+      },
+      "success": true,
+      "error": null,
+      "metadata": {
+        "iteration": 1,
+        "category": "multi_step_reasoning"
+      }
+    }
+  ]
+}
