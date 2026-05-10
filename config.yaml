@@ -1,0 +1,75 @@
+# Agent SDK comparison benchmark configuration.
+# API keys are read from environment variables named below; do not store literal secrets here.
+# This file is intended to become the source of truth for benchmark iterations, models, and task prompts.
+
+benchmark:
+  iterations: 1
+  mode: mock
+  temperature: 0.0
+  max_tokens: 1024
+
+agents:
+  openai:
+    enabled: true
+    model: gpt-4o-mini
+    api_key_env: OPENAI_API_KEY
+  anthropic:
+    enabled: true
+    model: claude-3-5-haiku-latest
+    api_key_env: ANTHROPIC_API_KEY
+  goose:
+    enabled: true
+    model: null
+    model_env: GOOSE_MODEL
+    binary: goose
+  gemma:
+    enabled: true
+    model: gemma-4-31b-it
+    base_url: http://192.168.1.169:8080/v1
+    api_key_env: GEMMA_API_KEY
+
+tasks:
+  web_search_current_ai_news:
+    enabled: true
+    name: "Web search: current AI news with citations"
+    category: web_search
+    prompt: >-
+      Find two recent AI model or agent SDK announcements from the last 30 days.
+      Return exactly two bullets. Each bullet must include the announcement, the
+      organization, date, and a source URL.
+  code_gen_slugify:
+    enabled: true
+    name: "Code generation: Python slugify helper"
+    category: code_generation
+    prompt: >-
+      Write a single Python function named slugify(text: str) -> str. It must
+      lowercase input, replace runs of non-alphanumeric characters with one
+      hyphen, strip leading/trailing hyphens, and include three assert examples.
+      Return only code.
+  file_read_write_summary:
+    enabled: true
+    name: "File read/write: transform JSON lines into summary file"
+    category: file_read_write
+    prompt: >-
+      Assume a workspace contains input/events.jsonl with one JSON object per
+      line: {"team": str, "score": int}. Describe the exact Python code needed
+      to read that file, compute total score by team, and write
+      output/team_scores.json. Return only a complete Python script.
+  data_parse_invoice_text:
+    enabled: true
+    name: "Data parsing: extract invoice fields"
+    category: data_parsing
+    prompt: |-
+      Parse this invoice text and return strict JSON with keys invoice_id, vendor, invoice_date, due_date, line_items, subtotal, tax, total. line_items must be a list of objects with description, quantity, unit_price, amount. Text:
+      Invoice INV-1042 | Vendor: Northwind Tools | Date: 2026-05-01 | Due: 2026-05-31
+      Items: 3 x Router Bit @ 12.50 = 37.50; 2 x Safety Goggles @ 18.00 = 36.00
+      Subtotal 73.50 | Tax 4.41 | Total 77.91
+  reasoning_project_schedule:
+    enabled: true
+    name: "Multi-step reasoning: dependency-aware schedule"
+    category: multi_step_reasoning
+    prompt: >-
+      A project has tasks A=2h, B=3h after A, C=1h after A, D=4h after B and C,
+      E=2h after C. Two workers are available, tasks are non-preemptive, and work
+      starts at 09:00. Build the shortest valid schedule. Return start/end time
+      for each task, assigned worker, and final completion time.
