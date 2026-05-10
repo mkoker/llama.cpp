@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from metrics.collector import MetricsCollector
+from reports.exporter import export_results
 from sdks.anthropic_agent import AnthropicAgent
 from sdks.gemma_agent import GemmaAgent
 from sdks.goose_agent import GooseAgent
@@ -263,8 +264,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     payload = {"summary": collector.summary(), "results": collector.as_dicts()}
     if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        export_results(payload["results"], args.output, summary=payload["summary"])
 
     print(json.dumps(payload["summary"] if args.summary else payload, indent=2))
     return 0 if payload["summary"]["failures"] == 0 else 1
