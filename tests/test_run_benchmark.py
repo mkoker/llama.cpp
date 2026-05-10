@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from run_benchmark import BenchmarkMockAgent, run_benchmark, select_agents, select_tasks
+from run_benchmark import run_benchmark, select_agents, select_tasks
+from sdks.mock_agent import MockAgent
 from tasks.basic_tasks import BenchmarkTask
 
 
@@ -72,7 +74,7 @@ def test_selectors_load_mock_agent_and_named_tasks() -> None:
     tasks = select_tasks(["code_gen_slugify"])
 
     assert len(agents) == 1
-    assert isinstance(agents[0], BenchmarkMockAgent)
+    assert isinstance(agents[0], MockAgent)
     assert [task.id for task in tasks] == ["code_gen_slugify"]
 
 
@@ -85,3 +87,28 @@ def test_cli_help_mentions_benchmark() -> None:
     )
 
     assert "benchmark" in completed.stdout.lower()
+
+
+def test_cli_mock_mode_writes_report_with_summary_and_results(tmp_path: Path) -> None:
+    output_path = tmp_path / "results.json"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "run_benchmark.py",
+            "--mode",
+            "mock",
+            "--output",
+            str(output_path),
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    stdout_payload = json.loads(completed.stdout)
+    assert "summary" in payload
+    assert "results" in payload
+    assert payload["summary"]["total_runs"] == len(payload["results"])
+    assert stdout_payload["summary"] == payload["summary"]
