@@ -1,0 +1,84 @@
+agent,task_id,task_name,model,success,latency_seconds,usage.prompt_tokens,usage.completion_tokens,usage.total_tokens,error,output,metadata.iteration,metadata.category
+openai,web_search_current_ai_news,Web search: current AI news with citations,gpt-4o-mini,False,1.374099520035088e-05,,,,"OpenAIError: Missing credentials. Please pass an `api_key`, `workload_identity`, `admin_api_key`, or set the `OPENAI_API_KEY` or `OPENAI_ADMIN_KEY` environment variable.",,1,web_search
+openai,code_gen_slugify,Code generation: Python slugify helper,gpt-4o-mini,False,7.627997547388077e-06,,,,"OpenAIError: Missing credentials. Please pass an `api_key`, `workload_identity`, `admin_api_key`, or set the `OPENAI_API_KEY` or `OPENAI_ADMIN_KEY` environment variable.",,1,code_generation
+openai,file_read_write_summary,File read/write: transform JSON lines into summary file,gpt-4o-mini,False,4.8009969759732485e-06,,,,"OpenAIError: Missing credentials. Please pass an `api_key`, `workload_identity`, `admin_api_key`, or set the `OPENAI_API_KEY` or `OPENAI_ADMIN_KEY` environment variable.",,1,file_read_write
+openai,data_parse_invoice_text,Data parsing: extract invoice fields,gpt-4o-mini,False,4.083005478605628e-06,,,,"OpenAIError: Missing credentials. Please pass an `api_key`, `workload_identity`, `admin_api_key`, or set the `OPENAI_API_KEY` or `OPENAI_ADMIN_KEY` environment variable.",,1,data_parsing
+openai,reasoning_project_schedule,Multi-step reasoning: dependency-aware schedule,gpt-4o-mini,False,4.141009412705898e-06,,,,"OpenAIError: Missing credentials. Please pass an `api_key`, `workload_identity`, `admin_api_key`, or set the `OPENAI_API_KEY` or `OPENAI_ADMIN_KEY` environment variable.",,1,multi_step_reasoning
+anthropic,web_search_current_ai_news,Web search: current AI news with citations,claude-3-5-haiku-latest,False,0.036428821011213586,,,,"TypeError: ""Could not resolve authentication method. Expected one of api_key, auth_token, or credentials to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted""",,1,web_search
+anthropic,code_gen_slugify,Code generation: Python slugify helper,claude-3-5-haiku-latest,False,0.0002918909885920584,,,,"TypeError: ""Could not resolve authentication method. Expected one of api_key, auth_token, or credentials to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted""",,1,code_generation
+anthropic,file_read_write_summary,File read/write: transform JSON lines into summary file,claude-3-5-haiku-latest,False,0.00017951501649804413,,,,"TypeError: ""Could not resolve authentication method. Expected one of api_key, auth_token, or credentials to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted""",,1,file_read_write
+anthropic,data_parse_invoice_text,Data parsing: extract invoice fields,claude-3-5-haiku-latest,False,0.00016406600479967892,,,,"TypeError: ""Could not resolve authentication method. Expected one of api_key, auth_token, or credentials to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted""",,1,data_parsing
+anthropic,reasoning_project_schedule,Multi-step reasoning: dependency-aware schedule,claude-3-5-haiku-latest,False,0.0001620790280867368,,,,"TypeError: ""Could not resolve authentication method. Expected one of api_key, auth_token, or credentials to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted""",,1,multi_step_reasoning
+gemma,web_search_current_ai_news,Web search: current AI news with citations,gemma-4-31B-it-Q4_K_M.gguf,True,10.559259329980705,67,122,189,,"* OpenAI released the Realtime API (developer preview), allowing developers to build low-latency multimodal experiences, OpenAI, October 1, 2024, https://openai.com/index/introducing-the-realtime-api/
+* Anthropic announced the ""Computer Use"" capability for Claude 3.5 Sonnet, enabling the model to interact with a computer interface like a human, Anthropic, October 22, 2024, https://www.anthropic.com/news/3-5-sonnet-computer-use",1,web_search
+gemma,code_gen_slugify,Code generation: Python slugify helper,gemma-4-31B-it-Q4_K_M.gguf,True,6.182777522015385,79,149,228,,"```python
+import re
+
+def slugify(text: str) -> str:
+    # Lowercase input
+    text = text.lower()
+    # Replace runs of non-alphanumeric characters with one hyphen
+    text = re.sub(r'[^a-z0-9]+', '-', text)
+    # Strip leading/trailing hyphens
+    return text.strip('-')
+
+assert slugify(""Hello World!"") == ""hello-world""
+assert slugify(""Python 3.10 is Great!!!"") == ""python-310-is-great""
+assert slugify(""---Special @ Characters---"") == ""special-characters""
+```",1,code_generation
+gemma,file_read_write_summary,File read/write: transform JSON lines into summary file,gemma-4-31B-it-Q4_K_M.gguf,True,47.99092404701514,89,158,247,,"```python
+import json
+from collections import defaultdict
+
+def main():
+    team_scores = defaultdict(int)
+    
+    # Read input/events.jsonl
+    with open('input/events.jsonl', 'r') as f:
+        for line in f:
+            if line.strip():
+                data = json.loads(line)
+                team_scores[data['team']] += data['score']
+    
+    # Write output/team_scores.json
+    with open('output/team_scores.json', 'w') as f:
+        json.dump(dict(team_scores), f)
+
+if __name__ == ""__main__"":
+    main()
+```",1,file_read_write
+gemma,data_parse_invoice_text,Data parsing: extract invoice fields,gemma-4-31B-it-Q4_K_M.gguf,True,11.526976557011949,194,218,412,,"```json
+{
+  ""invoice_id"": ""INV-1042"",
+  ""vendor"": ""Northwind Tools"",
+  ""invoice_date"": ""2026-05-01"",
+  ""due_date"": ""2026-05-31"",
+  ""line_items"": [
+    {
+      ""description"": ""Router Bit"",
+      ""quantity"": 3,
+      ""unit_price"": 12.50,
+      ""amount"": 37.50
+    },
+    {
+      ""description"": ""Safety Goggles"",
+      ""quantity"": 2,
+      ""unit_price"": 18.00,
+      ""amount"": 36.00
+    }
+  ],
+  ""subtotal"": 73.50,
+  ""tax"": 4.41,
+  ""total"": 77.91
+}
+```",1,data_parsing
+gemma,reasoning_project_schedule,Multi-step reasoning: dependency-aware schedule,gemma-4-31B-it-Q4_K_M.gguf,True,39.31744623900158,113,104,217,,"Worker 1:
+A: 09:00 - 11:00
+B: 11:00 - 14:00
+D: 14:00 - 18:00
+
+Worker 2:
+C: 11:00 - 12:00
+E: 12:00 - 14:00
+
+Final Completion Time: 18:00",1,multi_step_reasoning
