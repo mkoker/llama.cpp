@@ -1,0 +1,9 @@
+Provider,Capability,source_url,source_type,date_checked,confidence,caveats
+OpenAI,GPT-4o Realtime (native omni),https://platform.openai.com/docs/guides/realtime,official API docs,2026-05-20,High,"320-550 ms E2E target is a planning assumption, not a verified SLA; measure p50/p95 in pilot"
+Google,Gemini 2.0 Flash (streaming),https://ai.google.dev/gemini-api/docs/audio,official API docs,2026-05-20,High,"200-400 ms streaming latency is a planning assumption; region/model dependent"
+Deepgram,Nova-2 streaming,https://developers.deepgram.com/docs/streaming,official API docs,2026-05-20,High,"100-250 ms real-time streaming is planning assumption; endpointing affects latency"
+ElevenLabs,Turbo/Flash TTS,https://elevenlabs.io/docs/capabilities/text-to-speech,official API docs,2026-05-20,High,"150-280 ms TTFA is planning assumption; voice/model dependent"
+Cartesia,Sonic,https://docs.cartesia.ai/,official API docs,2026-05-20,High,"120-200 ms first-audio is planning assumption; validate with selected voice"
+Vapi,Cascaded voice agent platform,https://docs.vapi.ai/,official platform docs,2026-05-20,High,"650-1400 ms typical E2E is sensitivity range assumption; must benchmark target stack"
+Retell AI,Cascaded realtime voice platform,https://www.retellai.com/blog/how-real-time-voice-ai-works-stt-llm-tts,vendor explainer,2026-05-20,Medium,"750-1200 ms cascaded pipeline assumption; production ready per docs"
+Groq,Groq Llama inference (LLM),https://console.groq.com/docs/overview,official API docs,2026-05-20,High,"120-220 ms TTFT is planning assumption; queueing/prompt-size sensitive"
