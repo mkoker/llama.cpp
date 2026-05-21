@@ -2,7 +2,7 @@
 
 Date: 2026-05-21
 Mission: voice-ai-pilot-validation-pack-v1
-Artifact status: methodology for pilot validation, not pilot results
+Artifact status: methodology for pilot validation; no measured pilot outcomes yet
 Related model: `financials/risk_adjusted_roi.py`
 
 ## Purpose

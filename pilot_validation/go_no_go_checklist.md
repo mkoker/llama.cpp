@@ -2,7 +2,7 @@
 
 Date: 2026-05-21
 Mission: voice-ai-pilot-validation-pack-v1
-Artifact status: pilot decision checklist, not pilot results
+Artifact status: pilot decision checklist; no measured pilot outcomes yet
 Related artifacts: `pilot_validation/measurement_plan.md`, `pilot_validation/evidence_register.csv`, `financials/risk_adjusted_roi.md`
 
 ## Purpose
@@ -16,7 +16,7 @@ Decision options:
 - Pause: data is incomplete, not comparable to baseline, or too noisy for decision-making.
 - No-go: a hard blocker remains, measured workflow impact is negative, or risk-adjusted ROI is not defensible.
 
-Do not treat provider claims, demo performance, or planning assumptions as pilot results. Every checked item must link to pilot evidence, owner sign-off, or measured telemetry.
+Do not treat provider claims, demo performance, or planning assumptions as measured pilot outcomes. Every checked item must link to pilot evidence, owner sign-off, or measured telemetry.
 
 ## Universal gates for all verticals
 

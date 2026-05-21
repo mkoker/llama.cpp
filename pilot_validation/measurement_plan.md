@@ -2,7 +2,7 @@
 
 Date: 2026-05-21
 Mission: voice-ai-pilot-validation-pack-v1
-Artifact status: pilot measurement design, not pilot results
+Artifact status: pilot measurement design; no measured pilot outcomes yet
 
 ## Purpose
 
