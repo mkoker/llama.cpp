@@ -1,0 +1,924 @@
+{
+  "dry_run": true,
+  "external_api_calls": 0,
+  "generated_at": "dry-run-deterministic",
+  "harness_version": "1.0",
+  "iterations_per_scenario": 24,
+  "scenarios": [
+    {
+      "data_classification": "synthetic_no_phi_no_biometrics_no_customer_data",
+      "mode": "dry_run",
+      "notes": "Synthetic non-PHI timing sample for clinical turn-taking validation.",
+      "provider_stack": "native_realtime_omni",
+      "samples": [
+        {
+          "component_timings": {
+            "endpointing_ms": 229,
+            "native_model_first_audio_ms": 573
+          },
+          "fallback_used": false,
+          "latency_ms": 802,
+          "provider_error": false,
+          "sample_id": 1,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 169,
+            "native_model_first_audio_ms": 528
+          },
+          "fallback_used": false,
+          "latency_ms": 697,
+          "provider_error": false,
+          "sample_id": 2,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 161,
+            "native_model_first_audio_ms": 447
+          },
+          "fallback_used": false,
+          "latency_ms": 608,
+          "provider_error": false,
+          "sample_id": 3,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 301,
+            "native_model_first_audio_ms": 794
+          },
+          "fallback_used": false,
+          "latency_ms": 1095,
+          "provider_error": false,
+          "sample_id": 4,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 106,
+            "native_model_first_audio_ms": 298
+          },
+          "fallback_used": false,
+          "latency_ms": 404,
+          "provider_error": false,
+          "sample_id": 5,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 177,
+            "native_model_first_audio_ms": 423
+          },
+          "fallback_used": false,
+          "latency_ms": 600,
+          "provider_error": false,
+          "sample_id": 6,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 95,
+            "native_model_first_audio_ms": 269
+          },
+          "fallback_used": false,
+          "latency_ms": 364,
+          "provider_error": false,
+          "sample_id": 7,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 186,
+            "native_model_first_audio_ms": 492
+          },
+          "fallback_used": false,
+          "latency_ms": 678,
+          "provider_error": false,
+          "sample_id": 8,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 185,
+            "native_model_first_audio_ms": 375
+          },
+          "fallback_used": false,
+          "latency_ms": 560,
+          "provider_error": false,
+          "sample_id": 9,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 139,
+            "native_model_first_audio_ms": 402
+          },
+          "fallback_used": false,
+          "latency_ms": 541,
+          "provider_error": false,
+          "sample_id": 10,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 180,
+            "native_model_first_audio_ms": 459
+          },
+          "fallback_used": false,
+          "latency_ms": 639,
+          "provider_error": false,
+          "sample_id": 11,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 198,
+            "native_model_first_audio_ms": 662
+          },
+          "fallback_used": false,
+          "latency_ms": 860,
+          "provider_error": false,
+          "sample_id": 12,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 158,
+            "native_model_first_audio_ms": 456
+          },
+          "fallback_used": false,
+          "latency_ms": 614,
+          "provider_error": false,
+          "sample_id": 13,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 129,
+            "native_model_first_audio_ms": 296
+          },
+          "fallback_used": false,
+          "latency_ms": 425,
+          "provider_error": false,
+          "sample_id": 14,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 51,
+            "native_model_first_audio_ms": 122
+          },
+          "fallback_used": false,
+          "latency_ms": 173,
+          "provider_error": false,
+          "sample_id": 15,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 168,
+            "native_model_first_audio_ms": 413
+          },
+          "fallback_used": false,
+          "latency_ms": 581,
+          "provider_error": false,
+          "sample_id": 16,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 147,
+            "native_model_first_audio_ms": 347
+          },
+          "fallback_used": false,
+          "latency_ms": 494,
+          "provider_error": false,
+          "sample_id": 17,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 126,
+            "native_model_first_audio_ms": 295
+          },
+          "fallback_used": false,
+          "latency_ms": 421,
+          "provider_error": false,
+          "sample_id": 18,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 115,
+            "native_model_first_audio_ms": 312
+          },
+          "fallback_used": false,
+          "latency_ms": 427,
+          "provider_error": false,
+          "sample_id": 19,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 40,
+            "native_model_first_audio_ms": 108
+          },
+          "fallback_used": false,
+          "latency_ms": 148,
+          "provider_error": false,
+          "sample_id": 20,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 167,
+            "native_model_first_audio_ms": 405
+          },
+          "fallback_used": false,
+          "latency_ms": 572,
+          "provider_error": false,
+          "sample_id": 21,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 216,
+            "native_model_first_audio_ms": 432
+          },
+          "fallback_used": false,
+          "latency_ms": 648,
+          "provider_error": false,
+          "sample_id": 22,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 240,
+            "native_model_first_audio_ms": 518
+          },
+          "fallback_used": false,
+          "latency_ms": 758,
+          "provider_error": false,
+          "sample_id": 23,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 263,
+            "native_model_first_audio_ms": 518
+          },
+          "fallback_used": false,
+          "latency_ms": 781,
+          "provider_error": false,
+          "sample_id": 24,
+          "success": true
+        }
+      ],
+      "summary": {
+        "attempts": 24,
+        "error_count": 0,
+        "fallback_count": 0,
+        "latency_ms": {
+          "mean": 578.75,
+          "p50": 590.5,
+          "p95": 851.3,
+          "p95_pass": true,
+          "p99": 1040.95,
+          "target_p95": 1200
+        },
+        "success_rate": 1.0,
+        "successes": 24
+      },
+      "vertical": "Healthcare Omni",
+      "workflow": "ambient_documentation_turn"
+    },
+    {
+      "data_classification": "synthetic_no_phi_no_biometrics_no_customer_data",
+      "mode": "dry_run",
+      "notes": "Synthetic cascade timing sample with STT/LLM/TTS component timings.",
+      "provider_stack": "streaming_stt_llm_tts_cascade",
+      "samples": [
+        {
+          "component_timings": {
+            "endpointing_ms": 281,
+            "llm_ms": 405,
+            "stt_ms": 190,
+            "tts_first_audio_ms": 316
+          },
+          "fallback_used": false,
+          "latency_ms": 1192,
+          "provider_error": false,
+          "sample_id": 1,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 298,
+            "llm_ms": 382,
+            "stt_ms": 294,
+            "tts_first_audio_ms": 666
+          },
+          "fallback_used": false,
+          "latency_ms": 1640,
+          "provider_error": false,
+          "sample_id": 2,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 228,
+            "llm_ms": 279,
+            "stt_ms": 112,
+            "tts_first_audio_ms": 267
+          },
+          "fallback_used": false,
+          "latency_ms": 886,
+          "provider_error": false,
+          "sample_id": 3,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 262,
+            "llm_ms": 330,
+            "stt_ms": 112,
+            "tts_first_audio_ms": 374
+          },
+          "fallback_used": false,
+          "latency_ms": 1078,
+          "provider_error": false,
+          "sample_id": 4,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 227,
+            "llm_ms": 297,
+            "stt_ms": 136,
+            "tts_first_audio_ms": 406
+          },
+          "fallback_used": false,
+          "latency_ms": 1066,
+          "provider_error": false,
+          "sample_id": 5,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 186,
+            "llm_ms": 236,
+            "stt_ms": 132,
+            "tts_first_audio_ms": 331
+          },
+          "fallback_used": false,
+          "latency_ms": 885,
+          "provider_error": false,
+          "sample_id": 6,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 333,
+            "llm_ms": 364,
+            "stt_ms": 148,
+            "tts_first_audio_ms": 464
+          },
+          "fallback_used": false,
+          "latency_ms": 1309,
+          "provider_error": false,
+          "sample_id": 7,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 150,
+            "llm_ms": 196,
+            "stt_ms": 91,
+            "tts_first_audio_ms": 199
+          },
+          "fallback_used": false,
+          "latency_ms": 636,
+          "provider_error": false,
+          "sample_id": 8,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 244,
+            "llm_ms": 311,
+            "stt_ms": 107,
+            "tts_first_audio_ms": 321
+          },
+          "fallback_used": false,
+          "latency_ms": 983,
+          "provider_error": false,
+          "sample_id": 9,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 192,
+            "llm_ms": 288,
+            "stt_ms": 153,
+            "tts_first_audio_ms": 403
+          },
+          "fallback_used": false,
+          "latency_ms": 1036,
+          "provider_error": false,
+          "sample_id": 10,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 204,
+            "llm_ms": 273,
+            "stt_ms": 106,
+            "tts_first_audio_ms": 321
+          },
+          "fallback_used": false,
+          "latency_ms": 904,
+          "provider_error": false,
+          "sample_id": 11,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 253,
+            "llm_ms": 278,
+            "stt_ms": 206,
+            "tts_first_audio_ms": 474
+          },
+          "fallback_used": false,
+          "latency_ms": 1211,
+          "provider_error": false,
+          "sample_id": 12,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 209,
+            "llm_ms": 344,
+            "stt_ms": 130,
+            "tts_first_audio_ms": 458
+          },
+          "fallback_used": false,
+          "latency_ms": 1141,
+          "provider_error": false,
+          "sample_id": 13,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 324,
+            "llm_ms": 338,
+            "stt_ms": 189,
+            "tts_first_audio_ms": 382
+          },
+          "fallback_used": false,
+          "latency_ms": 1233,
+          "provider_error": false,
+          "sample_id": 14,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 256,
+            "llm_ms": 412,
+            "stt_ms": 131,
+            "tts_first_audio_ms": 462
+          },
+          "fallback_used": false,
+          "latency_ms": 1261,
+          "provider_error": false,
+          "sample_id": 15,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 161,
+            "llm_ms": 221,
+            "stt_ms": 101,
+            "tts_first_audio_ms": 286
+          },
+          "fallback_used": false,
+          "latency_ms": 769,
+          "provider_error": false,
+          "sample_id": 16,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 218,
+            "llm_ms": 269,
+            "stt_ms": 161,
+            "tts_first_audio_ms": 290
+          },
+          "fallback_used": false,
+          "latency_ms": 938,
+          "provider_error": false,
+          "sample_id": 17,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 235,
+            "llm_ms": 319,
+            "stt_ms": 158,
+            "tts_first_audio_ms": 393
+          },
+          "fallback_used": false,
+          "latency_ms": 1105,
+          "provider_error": false,
+          "sample_id": 18,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 157,
+            "llm_ms": 187,
+            "stt_ms": 131,
+            "tts_first_audio_ms": 293
+          },
+          "fallback_used": false,
+          "latency_ms": 768,
+          "provider_error": false,
+          "sample_id": 19,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 124,
+            "llm_ms": 134,
+            "stt_ms": 86,
+            "tts_first_audio_ms": 217
+          },
+          "fallback_used": false,
+          "latency_ms": 561,
+          "provider_error": false,
+          "sample_id": 20,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 209,
+            "llm_ms": 248,
+            "stt_ms": 139,
+            "tts_first_audio_ms": 422
+          },
+          "fallback_used": false,
+          "latency_ms": 1018,
+          "provider_error": false,
+          "sample_id": 21,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 150,
+            "llm_ms": 202,
+            "stt_ms": 123,
+            "tts_first_audio_ms": 241
+          },
+          "fallback_used": false,
+          "latency_ms": 716,
+          "provider_error": false,
+          "sample_id": 22,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 121,
+            "llm_ms": 184,
+            "stt_ms": 111,
+            "tts_first_audio_ms": 208
+          },
+          "fallback_used": false,
+          "latency_ms": 624,
+          "provider_error": false,
+          "sample_id": 23,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 319,
+            "llm_ms": 309,
+            "stt_ms": 165,
+            "tts_first_audio_ms": 375
+          },
+          "fallback_used": false,
+          "latency_ms": 1168,
+          "provider_error": false,
+          "sample_id": 24,
+          "success": true
+        }
+      ],
+      "summary": {
+        "attempts": 24,
+        "error_count": 0,
+        "fallback_count": 0,
+        "latency_ms": {
+          "mean": 1005.33,
+          "p50": 1027.0,
+          "p95": 1301.8,
+          "p95_pass": true,
+          "p99": 1563.87,
+          "target_p95": 1800
+        },
+        "success_rate": 1.0,
+        "successes": 24
+      },
+      "vertical": "Contact Center Cascade",
+      "workflow": "inbound_routing_and_summary"
+    },
+    {
+      "data_classification": "synthetic_no_phi_no_biometrics_no_customer_data",
+      "mode": "dry_run",
+      "notes": "Synthetic regulated-workflow timing sample; no biometric data used.",
+      "provider_stack": "realtime_voice_fraud_assist",
+      "samples": [
+        {
+          "component_timings": {
+            "endpointing_ms": 165,
+            "native_model_first_audio_ms": 443
+          },
+          "fallback_used": false,
+          "latency_ms": 608,
+          "provider_error": false,
+          "sample_id": 1,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 174,
+            "native_model_first_audio_ms": 535
+          },
+          "fallback_used": false,
+          "latency_ms": 709,
+          "provider_error": false,
+          "sample_id": 2,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 338,
+            "native_model_first_audio_ms": 758
+          },
+          "fallback_used": false,
+          "latency_ms": 1096,
+          "provider_error": false,
+          "sample_id": 3,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 248,
+            "native_model_first_audio_ms": 720
+          },
+          "fallback_used": false,
+          "latency_ms": 968,
+          "provider_error": false,
+          "sample_id": 4,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 166,
+            "native_model_first_audio_ms": 582
+          },
+          "fallback_used": false,
+          "latency_ms": 748,
+          "provider_error": false,
+          "sample_id": 5,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 194,
+            "native_model_first_audio_ms": 604
+          },
+          "fallback_used": false,
+          "latency_ms": 798,
+          "provider_error": false,
+          "sample_id": 6,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 256,
+            "native_model_first_audio_ms": 539
+          },
+          "fallback_used": false,
+          "latency_ms": 795,
+          "provider_error": false,
+          "sample_id": 7,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 209,
+            "native_model_first_audio_ms": 526
+          },
+          "fallback_used": false,
+          "latency_ms": 735,
+          "provider_error": false,
+          "sample_id": 8,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 309,
+            "native_model_first_audio_ms": 801
+          },
+          "fallback_used": false,
+          "latency_ms": 1110,
+          "provider_error": false,
+          "sample_id": 9,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 190,
+            "native_model_first_audio_ms": 485
+          },
+          "fallback_used": false,
+          "latency_ms": 675,
+          "provider_error": false,
+          "sample_id": 10,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 180,
+            "native_model_first_audio_ms": 478
+          },
+          "fallback_used": false,
+          "latency_ms": 658,
+          "provider_error": false,
+          "sample_id": 11,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 195,
+            "native_model_first_audio_ms": 643
+          },
+          "fallback_used": false,
+          "latency_ms": 838,
+          "provider_error": false,
+          "sample_id": 12,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 254,
+            "native_model_first_audio_ms": 590
+          },
+          "fallback_used": false,
+          "latency_ms": 844,
+          "provider_error": false,
+          "sample_id": 13,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 155,
+            "native_model_first_audio_ms": 462
+          },
+          "fallback_used": false,
+          "latency_ms": 617,
+          "provider_error": false,
+          "sample_id": 14,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 169,
+            "native_model_first_audio_ms": 590
+          },
+          "fallback_used": false,
+          "latency_ms": 759,
+          "provider_error": false,
+          "sample_id": 15,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 257,
+            "native_model_first_audio_ms": 708
+          },
+          "fallback_used": false,
+          "latency_ms": 965,
+          "provider_error": false,
+          "sample_id": 16,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 204,
+            "native_model_first_audio_ms": 492
+          },
+          "fallback_used": false,
+          "latency_ms": 696,
+          "provider_error": false,
+          "sample_id": 17,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 187,
+            "native_model_first_audio_ms": 398
+          },
+          "fallback_used": false,
+          "latency_ms": 585,
+          "provider_error": false,
+          "sample_id": 18,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 223,
+            "native_model_first_audio_ms": 556
+          },
+          "fallback_used": false,
+          "latency_ms": 779,
+          "provider_error": false,
+          "sample_id": 19,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 181,
+            "native_model_first_audio_ms": 428
+          },
+          "fallback_used": false,
+          "latency_ms": 609,
+          "provider_error": false,
+          "sample_id": 20,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 183,
+            "native_model_first_audio_ms": 648
+          },
+          "fallback_used": false,
+          "latency_ms": 831,
+          "provider_error": false,
+          "sample_id": 21,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 191,
+            "native_model_first_audio_ms": 651
+          },
+          "fallback_used": false,
+          "latency_ms": 842,
+          "provider_error": false,
+          "sample_id": 22,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 192,
+            "native_model_first_audio_ms": 600
+          },
+          "fallback_used": false,
+          "latency_ms": 792,
+          "provider_error": false,
+          "sample_id": 23,
+          "success": true
+        },
+        {
+          "component_timings": {
+            "endpointing_ms": 179,
+            "native_model_first_audio_ms": 503
+          },
+          "fallback_used": false,
+          "latency_ms": 682,
+          "provider_error": false,
+          "sample_id": 24,
+          "success": true
+        }
+      ],
+      "summary": {
+        "attempts": 24,
+        "error_count": 0,
+        "fallback_count": 0,
+        "latency_ms": {
+          "mean": 780.79,
+          "p50": 769.0,
+          "p95": 1076.8,
+          "p95_pass": true,
+          "p99": 1106.78,
+          "target_p95": 1500
+        },
+        "success_rate": 1.0,
+        "successes": 24
+      },
+      "vertical": "Fraud Operations",
+      "workflow": "voice_verification_alert_triage"
+    }
+  ]
+}
