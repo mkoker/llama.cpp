@@ -19,7 +19,18 @@ The financial model assumes labor savings from AHT reductions, documentation tim
 
 This case supports rapid, low-risk scaling of Voice AI with near-immediate positive cash flow.
 
-**Validation package:** The financial, latency, adoption, and compliance figures in this report are planning assumptions until confirmed in a target pilot environment. Use `pilot_validation/measurement_plan.md` for required pilot metrics, `pilot_validation/evidence_register.csv` for assumption ownership and evidence freshness, `pilot_validation/benchmark_harness.py` for dry-run/schema-ready benchmark capture, `financials/risk_adjusted_roi.md` and `financials/risk_adjusted_roi.py` for risk-adjusted ROI, and `pilot_validation/go_no_go_checklist.md` for vertical-specific go/no-go decisions.
+**Validation package:** The financial, latency, adoption, and compliance figures in this report are planning assumptions until confirmed in a target pilot environment. Use `pilot_validation/measurement_plan.md` for required pilot metrics, `pilot_validation/evidence_register.csv` for assumption ownership and evidence freshness, `pilot_validation/benchmark_harness.py` for dry-run/schema-ready benchmark capture, `pilot_validation/validate_results.py` for semantic result validation, `financials/risk_adjusted_roi.md` and `financials/risk_adjusted_roi.py` for risk-adjusted ROI, and `pilot_validation/go_no_go_checklist.md` for vertical-specific go/no-go decisions.
+
+**Hardened validation instructions:** Before treating any pilot output as decision evidence, run the dry-run harness and validator from the repository root:
+
+```bash
+python3 pilot_validation/benchmark_harness.py --dry-run --out pilot_validation/dry_run_results.json
+python3 pilot_validation/validate_results.py pilot_validation/dry_run_results.json pilot_validation/result_schema.json
+python3 pilot_validation/validate_evidence_register.py pilot_validation/evidence_register.csv
+python3 financials/risk_adjusted_roi.py
+```
+
+The dry-run output is a synthetic, no-PHI/no-biometric/no-customer-data fixture for checking capture mechanics, schema semantics, and decision workflow readiness. It is not live pilot evidence. Replace assumptions only after target-environment measurements pass `validate_results.py`, the evidence register has assigned owners/review dates, risk-adjusted ROI has been recalculated, and the relevant go/no-go checklist records technical readiness separately from legal/BAA/consent approval.
 
 ## Market & Technology Landscape
 
