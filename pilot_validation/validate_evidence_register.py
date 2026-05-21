@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import date
 from pathlib import Path
 
 REQUIRED_COLUMNS = [
@@ -19,6 +20,7 @@ REQUIRED_COLUMNS = [
 ]
 REQUIRED_NON_BLANK = [
     "assumption",
+    "artifact",
     "source_url",
     "confidence",
     "caveat",
@@ -26,6 +28,8 @@ REQUIRED_NON_BLANK = [
     "next_review",
     "owner",
 ]
+
+ALLOWED_CONFIDENCE_LEVELS = ("High", "Medium", "Low")
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,6 +41,14 @@ def parse_args() -> argparse.Namespace:
         help="Evidence register CSV path.",
     )
     return parser.parse_args()
+
+
+def parse_iso_date(value: str, row_number: int, column: str, errors: list[str]) -> date | None:
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError:
+        errors.append(f"row {row_number}: {column} must be ISO date YYYY-MM-DD")
+        return None
 
 
 def main() -> int:
@@ -63,6 +75,25 @@ def main() -> int:
         for column in REQUIRED_NON_BLANK:
             if not (row.get(column) or "").strip():
                 errors.append(f"row {row_number}: {column} is blank")
+
+        source_url = (row.get("source_url") or "").strip()
+        if source_url and not source_url.startswith(("http://", "https://")):
+            errors.append(f"row {row_number}: source_url must start with http:// or https://")
+
+        confidence = (row.get("confidence") or "").strip()
+        if confidence and not confidence.startswith(ALLOWED_CONFIDENCE_LEVELS):
+            errors.append(
+                f"row {row_number}: confidence must start with one of "
+                f"{', '.join(ALLOWED_CONFIDENCE_LEVELS)}"
+            )
+
+        last_checked = (row.get("last_checked") or "").strip()
+        next_review = (row.get("next_review") or "").strip()
+        if last_checked and next_review:
+            last_checked_date = parse_iso_date(last_checked, row_number, "last_checked", errors)
+            next_review_date = parse_iso_date(next_review, row_number, "next_review", errors)
+            if last_checked_date and next_review_date and next_review_date <= last_checked_date:
+                errors.append(f"row {row_number}: next_review must be after last_checked")
 
     if errors:
         for error in errors:
