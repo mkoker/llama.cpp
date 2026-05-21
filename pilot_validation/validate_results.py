@@ -66,7 +66,7 @@ def validate_schema_document(schema: dict[str, Any], errors: list[str]) -> None:
 
 
 def validate_result(result: dict[str, Any], errors: list[str]) -> None:
-    for key in [
+    expected_top_level_keys = [
         "generated_at",
         "harness_version",
         "dry_run",
@@ -74,7 +74,12 @@ def validate_result(result: dict[str, Any], errors: list[str]) -> None:
         "iterations_per_scenario",
         "seed",
         "scenarios",
-    ]:
+    ]
+    extra_top_level_keys = sorted(set(result) - set(expected_top_level_keys))
+    for key in extra_top_level_keys:
+        require(False, f"result has unexpected top-level key: {key}", errors)
+
+    for key in expected_top_level_keys:
         require(key in result, f"result missing top-level key: {key}", errors)
 
     require(isinstance(result.get("dry_run"), bool), "dry_run must be boolean", errors)

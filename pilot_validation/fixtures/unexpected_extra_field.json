@@ -1,0 +1,116 @@
+{
+  "generated_at": "dry-run-deterministic",
+  "harness_version": "1.0",
+  "dry_run": true,
+  "external_api_calls": 0,
+  "iterations_per_scenario": 1,
+  "seed": 20260521,
+  "scenarios": [
+    {
+      "vertical": "Healthcare Omni",
+      "workflow": "ambient_documentation_turn",
+      "provider_stack": "native_realtime_omni",
+      "mode": "dry_run",
+      "data_classification": "synthetic_no_phi_no_biometrics_no_customer_data",
+      "notes": "Negative fixture for unexpected extra top-level result field; synthetic dry-run data only.",
+      "summary": {
+        "attempts": 1,
+        "successes": 1,
+        "success_rate": 1.0,
+        "error_count": 0,
+        "fallback_count": 0,
+        "latency_ms": {
+          "mean": 800.0,
+          "p50": 800.0,
+          "p95": 800.0,
+          "p99": 800.0,
+          "target_p95": 1200,
+          "p95_pass": true
+        }
+      },
+      "samples": [
+        {
+          "sample_id": 1,
+          "latency_ms": 800,
+          "component_timings": {
+            "total_synthetic_ms": 800
+          },
+          "success": true,
+          "provider_error": false,
+          "fallback_used": false
+        }
+      ]
+    },
+    {
+      "vertical": "Contact Center Cascade",
+      "workflow": "inbound_routing_and_summary",
+      "provider_stack": "streaming_stt_llm_tts_cascade",
+      "mode": "dry_run",
+      "data_classification": "synthetic_no_phi_no_biometrics_no_customer_data",
+      "notes": "Negative fixture for unexpected extra top-level result field; synthetic dry-run data only.",
+      "summary": {
+        "attempts": 1,
+        "successes": 1,
+        "success_rate": 1.0,
+        "error_count": 0,
+        "fallback_count": 0,
+        "latency_ms": {
+          "mean": 1000.0,
+          "p50": 1000.0,
+          "p95": 1000.0,
+          "p99": 1000.0,
+          "target_p95": 1800,
+          "p95_pass": true
+        }
+      },
+      "samples": [
+        {
+          "sample_id": 1,
+          "latency_ms": 1000,
+          "component_timings": {
+            "total_synthetic_ms": 1000
+          },
+          "success": true,
+          "provider_error": false,
+          "fallback_used": false
+        }
+      ]
+    },
+    {
+      "vertical": "Fraud Operations",
+      "workflow": "voice_verification_alert_triage",
+      "provider_stack": "realtime_voice_fraud_assist",
+      "mode": "dry_run",
+      "data_classification": "synthetic_no_phi_no_biometrics_no_customer_data",
+      "notes": "Negative fixture for unexpected extra top-level result field; synthetic dry-run data only.",
+      "summary": {
+        "attempts": 1,
+        "successes": 1,
+        "success_rate": 1.0,
+        "error_count": 0,
+        "fallback_count": 0,
+        "latency_ms": {
+          "mean": 900.0,
+          "p50": 900.0,
+          "p95": 900.0,
+          "p99": 900.0,
+          "target_p95": 1500,
+          "p95_pass": true
+        }
+      },
+      "samples": [
+        {
+          "sample_id": 1,
+          "latency_ms": 900,
+          "component_timings": {
+            "total_synthetic_ms": 900
+          },
+          "success": true,
+          "provider_error": false,
+          "fallback_used": false
+        }
+      ]
+    }
+  ],
+  "unreviewed_decision_claim": "Negative fixture: unexpected extra result field could smuggle an unvalidated measured-performance claim into the decision packet."
+}
