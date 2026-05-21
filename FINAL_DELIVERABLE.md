@@ -8,7 +8,7 @@ author: Hermes Agent (Rex)
 
 ## Executive Summary
 
-This business case synthesizes comprehensive research across latency benchmarks, provider economics, buyer personas, financial modeling, and risk analysis to recommend Voice AI deployment strategies for enterprise verticals. The aggregate 3-year deployment across 170 seats (100 Contact Center Agents + 50 Physicians + 20 Fraud Analysts) delivers a projected 3-year NPV in the range of $12M to $16M, with an ROI projection range typically between 8,000% and 15,000%, and a rapid payback period (under 1 month). These returns stem from significant annual labor savings (est. $5.8M) significantly outpacing annual API/inference costs (est. $0.5M).
+This business case synthesizes comprehensive research across latency benchmarks, provider economics, buyer personas, financial modeling, and risk analysis to recommend Voice AI deployment strategies for enterprise verticals. The aggregate deployment model covers 102-170 effective seats depending on adoption and delivers a projected 3-year NPV range of $7.6M to $15.8M, an ROI projection range of ~9,200% to ~17,100%, and a rapid payback period of 0.2-0.4 months. These returns stem from annual labor-savings estimates of $3.141M-$6.355M significantly outpacing annual API/inference costs of $0.311M-$0.519M.
 
 **Key Technical Findings:**
 - **Gold Standard Latency Targets:** <800ms end-to-end for Contact Centers and <500ms for Healthcare (per established gold-standard benchmarks).
@@ -149,7 +149,7 @@ Prioritize Healthcare Omni deployment first due to the strongest per-seat ROI pr
 
 ## Conclusion & Uncertainty Audit
 
-The Voice AI business case demonstrates transformative potential across Contact Center, Healthcare, and Fraud verticals when architecture choices are aligned with strict latency Gold Standards and compliance requirements. By distinguishing between Optimized Cascade pipelines (suitable for <800ms Contact Center and Fraud workloads) and native Omni models (mandatory for <500ms Healthcare clinical use), enterprises can achieve a projected 3-year NPV in the range of $12M to $16M and an ROI projection range typically between 8,000% and 15,000%, with payback in under one month.
+The Voice AI business case demonstrates transformative potential across Contact Center, Healthcare, and Fraud verticals when architecture choices are aligned with strict latency Gold Standards and compliance requirements. By distinguishing between Optimized Cascade pipelines (suitable for <800ms Contact Center and Fraud workloads) and native Omni models (mandatory for <500ms Healthcare clinical use), enterprises can achieve a projected 3-year NPV range of $7.6M to $15.8M and an ROI projection range of ~9,200% to ~17,100%, with payback in under one month.
 
 **Uncertainty & Risk Acknowledgement:**
 While the financial projections are based on current provider pricing and benchmarked productivity gains, the following uncertainties remain first-class considerations:
@@ -201,7 +201,7 @@ To operationalize the recommendations, a phased approach is advised over 18 mont
 
 **Phase 2 (Months 4-9):** Contact Center cascade rollout for VP CX. Pilot optimized Pipecat-style stack on 20-30 agents handling inbound routing and post-call summarization. Measure AHT reduction against <800ms target. Leverage Deepgram and Cartesia components for cost efficiency.
 
-**Phase 3 (Months 10-18):** Fraud operations integration and enterprise scaling. Extend to 20 fraud analysts with high-reliability verification flows. Implement organization-wide monitoring dashboards for latency SLA, cost caps, and multi-provider failover. Full 170-seat deployment achieving the modeled $14.25M NPV.
+**Phase 3 (Months 10-18):** Fraud operations integration and enterprise scaling. Extend to 20 fraud analysts with high-reliability verification flows. Implement organization-wide monitoring dashboards for latency SLA, cost caps, and multi-provider failover. Full deployment should be judged against the validated scenario range, not a single headline NPV, with the current model projecting $7.6M-$15.8M depending on adoption and measured productivity.
 
 This roadmap preserves the critical Omni/Cascade distinction at every step, ensures compliance gate (HIPAA BAA) before PHI exposure, and sequences investments to capture quick payback from Contact Center while locking in high-value Healthcare returns. Continuous benchmarking against supporting benchmark data and provider performance matrices will maintain defensibility of the business case.
 

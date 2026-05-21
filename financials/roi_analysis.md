@@ -22,11 +22,20 @@ These values are drawn directly from provider pricing, seat counts, and implemen
 ## Productivity Assumptions (Scenario-Varied)
 These parameters drive sensitivity. Adoption scales effective seats; AHT reduction and impl cost vary by scenario.
 
+**Case Study Benchmarks:**
+- **Healthcare productivity / admin efficiency:** Simbo AI summarizes healthcare call-center and RCM deployments reporting **15% to 30% productivity gains**, **up to 20% lower operating costs**, and an Auburn Community Hospital case study with a **40% increase in coder productivity** and **50% reduction in discharged-not-final-billed cases**. This supports the physician/admin productivity assumption and the clinical labor-savings portion of the model.
+- **Contact-center AHT reduction:** Veridas reports voice-biometric authentication in **~3 seconds of natural speech** and a Mutua Madrileña case study with **up to 95% reduction in verification time**. Because the ROI model applies the reduction to broader call handling rather than authentication-only time, the scenario range remains discounted to **25% / 35% / 45% CC AHT reduction**.
+- **Fraud containment / analyst leverage:** Veridas Voice SHIELD detects speaker playback, deepfakes, synthetic voices, and cloned identities; the same source states the voice-biometrics stack is iBeta-certified for active/passive liveness detection. This supports the fraud-analyst containment assumption by moving first-pass synthetic-voice detection and replay screening from manual review into automated controls.
+
 | Scenario | Adoption Rate | CC AHT Reduction | Impl Cost per 100 Seats | Notes |
 |----------|---------------|------------------|-------------------------|-------|
-| Conservative | 60% | 25% | $90,000 | Lower risk tolerance, higher per-seat cost |
-| Base | 80% | 35% | $75,000 | Default realistic case |
-| Aggressive | 100% | 45% | $60,000 | Full rollout, optimized pricing |
+| Conservative | 60% | 25% | $90,000 | Lower risk tolerance, higher per-seat cost; productivity range anchored to lower case-study outcomes |
+| Base | 80% | 35% | $75,000 | Default realistic case; midpoint below authentication-only benchmark to avoid overclaiming |
+| Aggressive | 100% | 45% | $60,000 | Full rollout, optimized pricing; still below the cited 95% verification-time case study |
+
+**Citations:**
+- Simbo AI healthcare productivity case-study summary: [https://www.simbo.ai/blog/the-impact-of-ai-on-call-center-productivity-a-case-study-in-healthcare-communication-efficiency-156481/](https://www.simbo.ai/blog/the-impact-of-ai-on-call-center-productivity-a-case-study-in-healthcare-communication-efficiency-156481/)
+- Veridas AI call-center, Mutua Madrileña verification-time case study, and Voice SHIELD fraud/liveness controls: [https://veridas.com/en/ai-call-center/](https://veridas.com/en/ai-call-center/)
 
 ## Sensitivity Analysis
 Three-scenario comparison of key financial metrics (aggregate and per-persona).
