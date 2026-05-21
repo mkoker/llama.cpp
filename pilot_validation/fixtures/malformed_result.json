@@ -1,0 +1,9 @@
+{
+  "generated_at": "dry-run-deterministic",
+  "harness_version": "1.0",
+  "dry_run": true,
+  "external_api_calls": 1,
+  "iterations_per_scenario": 0,
+  "seed": 4242,
+  "scenarios": []
+}
