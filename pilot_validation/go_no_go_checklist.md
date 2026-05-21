@@ -18,6 +18,19 @@ Decision options:
 
 Do not treat provider claims, demo performance, or planning assumptions as measured pilot outcomes. Every checked item must link to pilot evidence, owner sign-off, or measured telemetry.
 
+## Technical readiness vs legal approval
+
+Technical readiness and legal approval are separate decision tracks. Passing latency, quality, adoption, observability, and ROI gates means the pilot is technically ready for the next stage; it does not authorize use of PHI, biometric identifiers, recorded calls, regulated customer data, or any other restricted data.
+
+A vertical can be technically ready and still remain a legal no-go. Legal approval must be recorded independently with the required BAA/vendor terms, consent/disclosure workflow, retention policy, audit logging posture, jurisdiction review, and data-processing approvals before regulated data exposure or production expansion.
+
+| Track | What it proves | Required evidence | Blocks production when missing |
+|---|---|---|---|
+| Technical readiness | The workflow meets measured latency, quality, adoption, reliability, cost, and risk-adjusted ROI thresholds in the target environment | Benchmark output, pilot telemetry, QA review, adoption logs, billing export, ROI update | Yes, if technical thresholds fail or measured evidence is incomplete |
+| Legal approval | The workflow is approved for the data and jurisdiction in scope, including BAA, consent/disclosure, retention, auditability, vendor terms, and biometric/PHI processing where applicable | Legal/compliance sign-off, BAA/vendor terms, consent logs, retention/audit configuration, jurisdiction review | Yes, even when all technical thresholds pass |
+
+Decision rule: mark the technical-readiness track and the legal-approval track independently in the decision record. A production go requires both tracks to pass. Conditional go can only apply to non-blocking remediation; unresolved BAA, consent, PHI, biometric, retention, or disclosure approval remains a no-go for regulated exposure.
+
 ## Universal gates for all verticals
 
 | Gate | Go threshold | Conditional go | No-go trigger | Evidence owner |
@@ -27,7 +40,7 @@ Do not treat provider claims, demo performance, or planning assumptions as measu
 | Latency reporting | p50, p95, and p99 end-to-end latency reported by vertical and workflow | p95 reported, p99 pending, and no safety-critical decision depends on p99 | Only average latency is available | Technical pilot lead |
 | Cost validation | Cost per completed interaction is measured and within 20% of model input or ROI is recalculated with actual cost | Cost exceeds model by 20-35% but risk-adjusted ROI remains positive with mitigation | Cost exceeds model enough to erase risk-adjusted ROI or billing export is unavailable | Finance / ops analyst |
 | Adoption | Sustained active usage meets vertical threshold for two consecutive pilot weeks | Usage improves week-over-week but misses threshold by <=10 percentage points | Eligible users bypass the workflow or opt out at levels that invalidate ROI | Pilot product owner |
-| Compliance | Required legal, consent, retention, audit, PHI/biometric, and data-processing gates are signed off before regulated data exposure | Non-blocking remediation has owner/date and pilot remains limited to approved data | Required legal approval, BAA, consent, retention, or biometric approval is missing for regulated data | Compliance owner |
+| Legal approval | Required legal, BAA/vendor terms, consent/disclosure, retention, audit, PHI/biometric, and data-processing gates are signed off before regulated data exposure; tracked separately from technical readiness | Non-blocking remediation has owner/date and pilot remains limited to approved data | Required legal approval, BAA, consent, retention, disclosure, or biometric approval is missing for regulated data | Compliance owner |
 | Human escalation | Escalation path exists, is tested, and high-risk cases route to a human | Escalation works but operational handoff needs tightening before scale | Human-in-loop path is missing or auditability is insufficient | Business owner |
 | Risk-adjusted ROI | Updated model remains positive after measured adoption, latency, compliance, and provider risk adjustments | ROI remains positive but depends on one remediated risk factor with named owner/date | Risk-adjusted ROI is negative, unmeasured, or based mainly on planning assumptions | Finance / pilot product owner |
 
@@ -98,6 +111,8 @@ Use this section at the end of each pilot window.
 | Latency result | p50 TBD / p95 TBD / p99 TBD |
 | Adoption result | TBD |
 | Quality result | TBD |
+| Technical readiness status | Pass / Conditional / Fail / TBD |
+| Legal approval status | Approved / Conditional non-regulated only / Not approved / TBD |
 | Compliance status | TBD |
 | Cost per completed interaction | TBD |
 | Risk-adjusted ROI result | TBD |
