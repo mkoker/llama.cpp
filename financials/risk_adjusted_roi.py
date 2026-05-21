@@ -57,6 +57,14 @@ COST_PER_MINUTE = {
     "financial": 0.1243,
 }
 
+MIN_RISK_PASS_FACTOR = 0.0
+MAX_RISK_PASS_FACTOR = 1.0
+
+
+def bounded_pass_factor(pass_factor: float) -> float:
+    """Clamp risk pass factors to the supported 0.0-1.0 range."""
+    return min(max(pass_factor, MIN_RISK_PASS_FACTOR), MAX_RISK_PASS_FACTOR)
+
 
 @dataclass(frozen=True)
 class RiskFactor:
@@ -67,8 +75,7 @@ class RiskFactor:
     @property
     def risk_discount(self) -> float:
         """Discount applied by this risk factor, bounded to 0-100%."""
-        bounded_pass_factor = min(max(self.pass_factor, 0.0), 1.0)
-        return 1.0 - bounded_pass_factor
+        return 1.0 - bounded_pass_factor(self.pass_factor)
 
 
 @dataclass(frozen=True)
@@ -137,7 +144,7 @@ def calculate_payback_months(one_time_impl: float, annual_net_benefit: float) ->
 def composite_pass_factor(risk_factors: Iterable[RiskFactor]) -> float:
     pass_factor = 1.0
     for factor in risk_factors:
-        pass_factor *= min(max(factor.pass_factor, 0.0), 1.0)
+        pass_factor *= bounded_pass_factor(factor.pass_factor)
     return pass_factor
 
 
