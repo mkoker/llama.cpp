@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kgetsit.com/schemas/voice-ai-pilot-validation-result.schema.json",
+  "title": "Voice AI Pilot Validation Benchmark Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "generated_at",
+    "harness_version",
+    "dry_run",
+    "external_api_calls",
+    "iterations_per_scenario",
+    "seed",
+    "scenarios"
+  ],
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "description": "ISO-8601 timestamp for live runs, or dry-run-deterministic for deterministic offline runs.",
+      "minLength": 1
+    },
+    "harness_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "external_api_calls": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "iterations_per_scenario": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "seed": {
+      "type": "integer"
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/scenario_result"
+      }
+    }
+  },
+  "$defs": {
+    "scenario_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vertical",
+        "workflow",
+        "provider_stack",
+        "mode",
+        "data_classification",
+        "notes",
+        "summary",
+        "samples"
+      ],
+      "properties": {
+        "vertical": {
+          "type": "string",
+          "enum": [
+            "Healthcare Omni",
+            "Contact Center Cascade",
+            "Fraud Operations"
+          ]
+        },
+        "workflow": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider_stack": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "dry_run",
+            "live"
+          ]
+        },
+        "data_classification": {
+          "type": "string",
+          "enum": [
+            "synthetic_no_phi_no_biometrics_no_customer_data",
+            "deidentified_customer_approved",
+            "customer_production_restricted"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "samples": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/sample"
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempts",
+        "successes",
+        "success_rate",
+        "error_count",
+        "fallback_count",
+        "latency_ms"
+      ],
+      "properties": {
+        "attempts": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "successes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "success_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "error_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fallback_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "latency_ms": {
+          "$ref": "#/$defs/latency_summary"
+        }
+      }
+    },
+    "latency_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mean",
+        "p50",
+        "p95",
+        "p99",
+        "target_p95",
+        "p95_pass"
+      ],
+      "properties": {
+        "mean": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p50": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p99": {
+          "type": "number",
+          "minimum": 0
+        },
+        "target_p95": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "p95_pass": {
+          "type": "boolean"
+        }
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_id",
+        "latency_ms",
+        "component_timings",
+        "success",
+        "provider_error",
+        "fallback_used"
+      ],
+      "properties": {
+        "sample_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "latency_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "component_timings": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "provider_error": {
+          "type": "boolean"
+        },
+        "fallback_used": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
