@@ -170,9 +170,20 @@ def validate_result(result: dict[str, Any], errors: list[str]) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate Voice AI pilot benchmark schema and result JSON.")
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        metavar="PATH",
+        help="Optional positional form: RESULT_JSON RESULT_SCHEMA_JSON.",
+    )
     parser.add_argument("--schema", default="pilot_validation/result_schema.json", help="Path to formal JSON schema document.")
     parser.add_argument("--result", default="pilot_validation/dry_run_results.json", help="Path to benchmark result JSON.")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.paths:
+        if len(args.paths) != 2:
+            parser.error("positional form requires exactly: RESULT_JSON RESULT_SCHEMA_JSON")
+        args.result, args.schema = args.paths
+    return args
 
 
 def main() -> int:
