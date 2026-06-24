@@ -687,20 +687,7 @@ void llama_context::sched_reserve() {
                 }
             }
         }
-        if (staging_size > 0) {
-            for (const auto & backend : backends) {
-                auto * dev = ggml_backend_get_device(backend.get());
-                if (!dev) continue;
-                auto * reg = ggml_backend_dev_backend_reg(dev);
-                if (!reg) continue;
-                using fn_t = void (*)(ggml_backend_t, size_t);
-                auto * fn = (fn_t)ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_alloc_expert_staging");
-                if (fn) {
-                    fn(backend.get(), staging_size);
-                    break;
-                }
-            }
-        }
+        (void) staging_size; // scheduler-owned expert cache no longer uses a separate MUL_MAT_ID staging arena
     }
 
     // initialize expert cache for MoE CPU offload

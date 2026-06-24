@@ -12,6 +12,7 @@
 #include "ggml-backend-impl.h"
 #include "ggml-alloc.h"
 #include "ggml-impl.h"
+#include "ggml-expert-cache-key.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -761,6 +762,11 @@ static bool ggml_is_view_op(enum ggml_op op) {
 #define GGML_SCHED_MAX_COPIES 4
 #endif
 
+typedef bool (*ggml_backend_sched_expert_cache_copy_fn_t)(
+    ggml_backend_t, ggml_tensor *, const void *, int64_t, size_t, const ggml_bitset_t *, size_t, const void *, size_t);
+typedef void (*ggml_backend_sched_expert_cache_insert_fn_t)(
+    ggml_backend_t, ggml_tensor *, int64_t, size_t, const ggml_bitset_t *, size_t, const void *, size_t);
+
 struct ggml_backend_sched_split {
     int backend_id;
     int i_start;
@@ -779,6 +785,8 @@ struct ggml_backend_sched {
 
     ggml_backend_t backends[GGML_SCHED_MAX_BACKENDS];
     ggml_backend_buffer_type_t bufts[GGML_SCHED_MAX_BACKENDS];
+    ggml_backend_sched_expert_cache_copy_fn_t expert_cache_copy_fns[GGML_SCHED_MAX_BACKENDS];
+    ggml_backend_sched_expert_cache_insert_fn_t expert_cache_insert_fns[GGML_SCHED_MAX_BACKENDS];
     ggml_gallocr_t galloc;
 
     // hash map of the nodes in the graph
@@ -874,6 +882,32 @@ static char causes[GGML_DEFAULT_GRAPH_SIZE*16 + GGML_SCHED_MAX_SPLITS_DEBUG*GGML
 #define GET_CAUSE(node) ""
 #endif
 
+
+static bool ggml_backend_sched_buffer_is_host(ggml_backend_buffer_t buffer) {
+    if (buffer == nullptr) {
+        return false;
+    }
+    if (ggml_backend_buffer_is_host(buffer)) {
+        return true;
+    }
+    const char * buft_name = buffer->buft ? ggml_backend_buft_name(buffer->buft) : nullptr;
+    return buft_name != nullptr && strstr(buft_name, "Host") != nullptr;
+}
+
+static bool ggml_backend_sched_is_host_moe_expert_src(
+        const ggml_tensor * op,
+        const ggml_tensor * src,
+        int src_index) {
+    return op != nullptr &&
+        src != nullptr &&
+        op->op == GGML_OP_MUL_MAT_ID &&
+        src_index == 0 &&
+        src->buffer != nullptr &&
+        src->ne[2] > 0 &&
+        op->src[2] != nullptr &&
+        ggml_backend_sched_buffer_is_host(src->buffer);
+}
+
 // returns the backend that should be used for the node based on the current locations
 static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, struct ggml_tensor * tensor) {
     // assign pre-allocated nodes to their backend
@@ -913,12 +947,16 @@ static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, st
         }
         // skip ROPE since the rope freqs tensor is too small to choose a backend based on it
         // not an ideal solution
-        if (tensor->op != GGML_OP_ROPE && src->buffer != NULL && ((src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS || (tensor->op == GGML_OP_MUL_MAT_ID && i == 0 && (ggml_backend_buffer_is_host(src->buffer) || strstr(ggml_backend_buft_name(src->buffer->buft), "Host")))) || (tensor->op == GGML_OP_MUL_MAT_ID && i == 0 && ((ggml_backend_buffer_is_host(src->buffer) || strstr(ggml_backend_buft_name(src->buffer->buft), "Host")) || strstr(ggml_backend_buft_name(src->buffer->buft), "Host"))))) {
+        const bool weight_like = src->buffer != NULL && (src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS ||
+            ggml_backend_sched_is_host_moe_expert_src(tensor, src, i));
+        if (tensor->op != GGML_OP_ROPE && weight_like) {
             int src_backend_id = ggml_backend_sched_backend_from_buffer(sched, src, tensor);
             // check if a backend with higher prio wants to offload the op
-            if (sched->op_offload && src_backend_id == sched->n_backends - 1 && (ggml_backend_buffer_is_host(src->buffer) || strstr(ggml_backend_buft_name(src->buffer->buft), "Host"))) {
+            if (sched->op_offload && src_backend_id == sched->n_backends - 1 &&
+                    (ggml_backend_sched_buffer_is_host(src->buffer) || ggml_backend_sched_is_host_moe_expert_src(tensor, src, i))) {
                 for (int b = 0; b < src_backend_id; b++) {
-                    if (ggml_backend_supports_op(sched->backends[b], tensor) && (tensor->op == GGML_OP_MUL_MAT_ID || (tensor->op == GGML_OP_MUL_MAT_ID || ggml_backend_offload_op(sched->backends[b], tensor)))) {
+                    if (ggml_backend_supports_op(sched->backends[b], tensor) &&
+                            (ggml_backend_sched_is_host_moe_expert_src(tensor, src, i) || ggml_backend_offload_op(sched->backends[b], tensor))) {
                         SET_CAUSE(tensor, "1.off");
                         return b;
                     }
@@ -1275,9 +1313,14 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
                     if (src == NULL) {
                         continue;
                     }
-                    // check if a weight is on a different and incompatible backend
-                    // by starting a new split, the memory of the previously offloaded weights can be reused
-                    if (src->buffer != NULL && src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
+                    // check if a weight-like tensor is on a different and incompatible backend
+                    // by starting a new split, the memory of previously offloaded tensors can be reused
+                    const bool is_weight_tensor = src->buffer != NULL && src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS;
+                    const bool is_moe_compute_weight = src->buffer != NULL &&
+                        src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_COMPUTE &&
+                        node->op == GGML_OP_MUL_MAT_ID &&
+                        j == 0;
+                    if (is_weight_tensor || is_moe_compute_weight) {
                         int src_backend_id = tensor_backend_id(src);
                         if (src_backend_id != cur_backend_id && !ggml_backend_sched_buffer_supported(sched, src, cur_backend_id)) {
                             need_new_split = true;
@@ -1531,6 +1574,60 @@ static bool ggml_backend_sched_alloc_splits(ggml_backend_sched_t sched) {
     return true;
 }
 
+
+static uint64_t ggml_sched_expert_cache_source_tensor_id(const ggml_tensor * tensor) {
+    GGML_ASSERT(tensor != nullptr);
+    const ggml_tensor * base = tensor;
+    while (base->view_src != nullptr) {
+        base = base->view_src;
+    }
+
+    // Tensor object addresses can change between scheduler graph rebuilds.
+    // Use the underlying source data pointer when available so cache keys stay stable across tokens.
+    if (base->data != nullptr) {
+        return (uint64_t) (uintptr_t) base->data;
+    }
+
+    return (uint64_t) (uintptr_t) base;
+}
+
+static bool ggml_sched_expert_cache_make_key_base(
+    const ggml_tensor * input,
+    const ggml_tensor * input_cpy,
+    int split_backend_id,
+    size_t expert_size,
+    ggml_expert_cache_key_base * key_base) {
+
+    if (input == nullptr || input_cpy == nullptr || key_base == nullptr || split_backend_id < 0 ||
+            input->ne[2] <= 0 || expert_size == 0) {
+        return false;
+    }
+
+    // Unsupported layouts use the original selective H2D copy path. Cache slots are keyed and copied
+    // at exactly one contiguous expert stride, so non-contiguous or shape-mismatched tensors must not
+    // enter the persistent cache.
+    if (!ggml_is_contiguous_2(input) || !ggml_is_contiguous_2(input_cpy) ||
+            (size_t) input->nb[2] != expert_size || (size_t) input_cpy->nb[2] != expert_size ||
+            input->type != input_cpy->type ||
+            input->ne[0] != input_cpy->ne[0] || input->ne[1] != input_cpy->ne[1] ||
+            input->ne[2] != input_cpy->ne[2] || input->ne[3] != input_cpy->ne[3]) {
+        return false;
+    }
+
+    *key_base = {
+        GGML_EXPERT_CACHE_KEY_VERSION,
+        0,
+        (uintptr_t) ggml_sched_expert_cache_source_tensor_id(input),
+        (uint32_t) split_backend_id,
+        (uint32_t) input->type,
+        {(uint64_t) input->ne[0], (uint64_t) input->ne[1], (uint64_t) input->ne[2], (uint64_t) input->ne[3]},
+        {(uint64_t) input->nb[0], (uint64_t) input->nb[1], (uint64_t) input->nb[2], (uint64_t) input->nb[3]},
+        (uint64_t) expert_size,
+    };
+
+    return true;
+}
+
 static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t sched) {
     GGML_ASSERT(sched);
     struct ggml_backend_sched_split * splits = sched->splits;
@@ -1617,16 +1714,21 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                         prev_ids_tensor = ids_tensor;
                     }
 
-                    // Try expert cache first (persistent GPU cache avoids redundant H2D copies)
-                    typedef bool (*expert_cache_copy_fn_t)(ggml_backend_t, ggml_tensor *, const void *, int64_t, size_t, const ggml_bitset_t *, size_t);
-                    auto * dev = ggml_backend_get_device(split_backend);
-                    auto * reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
-                    expert_cache_copy_fn_t cache_fn = reg ?
-                        (expert_cache_copy_fn_t)ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_expert_cache_copy") : nullptr;
+                    // Try expert cache first (persistent GPU cache avoids redundant H2D copies).
+                    // Backend proc-address lookups are cached at scheduler construction; this path runs once per
+                    // copied MoE tensor, so avoid registry lookups and key construction unless a backend supports it.
+                    ggml_backend_sched_expert_cache_copy_fn_t cache_copy_fn = sched->expert_cache_copy_fns[split_backend_id];
+                    ggml_backend_sched_expert_cache_insert_fn_t cache_insert_fn = sched->expert_cache_insert_fns[split_backend_id];
 
                     bool cache_handled = false;
-                    if (cache_fn) {
-                        cache_handled = cache_fn(split_backend, input_cpy, input->data, n_expert, expert_size, used_ids.data(), used_ids.size());
+                    ggml_expert_cache_key_base key_base;
+                    bool cache_key_valid = false;
+                    const bool cache_available = cache_copy_fn || cache_insert_fn;
+                    if (cache_available) {
+                        cache_key_valid = ggml_sched_expert_cache_make_key_base(input, input_cpy, split_backend_id, expert_size, &key_base);
+                        if (cache_key_valid && cache_copy_fn) {
+                            cache_handled = cache_copy_fn(split_backend, input_cpy, input->data, n_expert, expert_size, used_ids.data(), used_ids.size(), (const void *) &key_base, sizeof(key_base));
+                        }
                     }
 
                     if (!cache_handled) {
@@ -1666,6 +1768,10 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                             last_id = id;
                         }
                         copy_experts(first_id, last_id);
+
+                        if (cache_key_valid && cache_insert_fn) {
+                            cache_insert_fn(split_backend, input_cpy, n_expert, expert_size, used_ids.data(), used_ids.size(), (const void *) &key_base, sizeof(key_base));
+                        }
                     }
                 } else {
                     // try async copy, but if not possible, we can still use a sync copy without synchronizing the dst backend, since we handle the synchronization here with multiple copies and events
@@ -1786,6 +1892,13 @@ ggml_backend_sched_t ggml_backend_sched_new(
         sched->backends[b] = backends[b];
         sched->bufts[b] = bufts ? bufts[b] : ggml_backend_get_default_buffer_type(backends[b]);
         GGML_ASSERT(ggml_backend_supports_buft(backends[b], sched->bufts[b]));
+
+        auto * dev = ggml_backend_get_device(backends[b]);
+        auto * reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
+        sched->expert_cache_copy_fns[b] = reg ?
+            (ggml_backend_sched_expert_cache_copy_fn_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_expert_cache_copy") : nullptr;
+        sched->expert_cache_insert_fns[b] = reg ?
+            (ggml_backend_sched_expert_cache_insert_fn_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_cuda_expert_cache_insert") : nullptr;
 
         if (sched->n_copies > 1) {
             for (int c = 0; c < sched->n_copies; c++) {

@@ -67,41 +67,33 @@ ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_
     cache->n_slots    = n_slots;
     cache->slot_size  = slot_size_bytes;
     cache->total_size = pool_bytes;
+    cache->device     = device;
     cache->lru_head   = 0;
     cache->lru_tail   = n_slots - 1;
+    cache->next_free_slot = 0;
     cache->hits       = 0;
     cache->misses     = 0;
-    cache->staging_buf  = nullptr;
-    cache->staging_size = 0;
-
-    // allocate staging from cache budget: staging = slot_size * 128 (one full expert tensor)
-    size_t staging_want = slot_size_bytes * 128;
-    if (staging_want > pool_bytes / 3) staging_want = pool_bytes / 3; // cap at 1/3 of budget
-    {
-        cudaError_t se = cudaMalloc(&cache->staging_buf, staging_want);
-        if (se == cudaSuccess) {
-            cache->staging_size = staging_want;
-        } else {
-            cudaGetLastError();
-            cache->staging_buf = nullptr;
-            cache->staging_size = 0;
-        }
-    }
-
-
+    cache->h2d_copies = 0;
+    cache->h2d_bytes  = 0;
+    cache->d2d_copies = 0;
+    cache->d2d_bytes  = 0;
+    cache->skipped_h2d_due_to_hit = 0;
     cache->slots = new ggml_expert_cache_slot[n_slots];
 
     for (int i = 0; i < n_slots; i++) {
         cache->slots[i].data       = (char *)pool + (size_t)i * slot_size_bytes;
-        cache->slots[i].tensor_ptr = nullptr;
-        cache->slots[i].expert_idx = -1;
+        cache->slots[i].occupied         = false;
+        cache->slots[i].tensor_ptr       = nullptr;
+        cache->slots[i].expert_idx       = -1;
         cache->slots[i].size       = 0;
         cache->slots[i].prev       = i - 1;
         cache->slots[i].next       = (i + 1 < n_slots) ? i + 1 : -1;
     }
 
-    GGML_LOG_INFO("%s: expert cache initialized — %d slots, %.1f MiB total\n",
-                  __func__, n_slots, (double)pool_bytes / (1024.0 * 1024.0));
+    cache->slot_map.reserve((size_t) n_slots);
+
+    GGML_LOG_INFO("%s: expert cache arena initialized on device %d — %d slots, %.1f MiB total\n",
+                  __func__, device, n_slots, (double)pool_bytes / (1024.0 * 1024.0));
 
     return cache;
 }
@@ -114,10 +106,12 @@ void ggml_expert_cache_free(ggml_expert_cache * cache) {
     int64_t total = cache->hits + cache->misses;
     double hit_rate = total > 0 ? 100.0 * (double)cache->hits / (double)total : 0.0;
 
-    GGML_LOG_INFO("%s: expert cache stats - hits: %" PRId64 ", misses: %" PRId64 ", hit rate: %.1f%%\n",
-                  __func__, cache->hits, cache->misses, hit_rate);
+    GGML_LOG_INFO("%s: expert cache stats (device %d) - hits: %" PRId64 ", misses: %" PRId64 ", hit rate: %.1f%%, h2d copies: %" PRId64 ", h2d bytes: %" PRId64 ", d2d copies: %" PRId64 ", d2d bytes: %" PRId64 ", skipped h2d: %" PRId64 "\n",
+                  __func__, cache->device, cache->hits, cache->misses, hit_rate,
+                  cache->h2d_copies, cache->h2d_bytes,
+                  cache->d2d_copies, cache->d2d_bytes,
+                  cache->skipped_h2d_due_to_hit);
 
-    if (cache->staging_buf) { CUDA_CHECK(cudaFree(cache->staging_buf)); }
     CUDA_CHECK(cudaFree(cache->pool));
     delete[] cache->slots;
     delete cache;
@@ -125,60 +119,213 @@ void ggml_expert_cache_free(ggml_expert_cache * cache) {
 
 // ── Lookup / Insert ─────────────────────────────────────────────────────
 
-void * ggml_expert_cache_get(
-        ggml_expert_cache * cache,
-        void *              tensor_ptr,
-        int64_t             expert_idx,
-        const void *        src_data,
-        size_t              expert_size,
-        cudaStream_t        stream) {
+void * ggml_expert_cache_lookup(
+        ggml_expert_cache *               cache,
+        const ggml_expert_cache_key_base & key_base,
+        int64_t                           expert_idx,
+        bool *                            was_hit) {
+    GGML_ASSERT(cache != nullptr);
+
+    std::lock_guard<std::mutex> lock(cache->mtx);
+
+    ggml_expert_cache_key key{key_base, expert_idx};
+    auto it = cache->slot_map.find(key);
+    if (it == cache->slot_map.end()) {
+        cache->misses++;
+        if (was_hit) {
+            *was_hit = false;
+        }
+        return nullptr;
+    }
+
+    const int idx = it->second;
+    cache->hits++;
+    if (was_hit) {
+        *was_hit = true;
+    }
+
+    // promote to MRU
+    lru_unlink(cache, idx);
+    lru_push_front(cache, idx);
+
+    return cache->slots[idx].data;
+}
+
+
+bool ggml_expert_cache_copy_hits(
+        ggml_expert_cache *               cache,
+        const ggml_expert_cache_key_base & key_base,
+        void *                            dst_data,
+        int64_t                           n_expert,
+        size_t                            expert_size,
+        const ggml_bitset_t *             used,
+        cudaStream_t                      stream) {
     GGML_ASSERT(cache != nullptr);
     GGML_ASSERT(expert_size <= cache->slot_size);
 
     std::lock_guard<std::mutex> lock(cache->mtx);
 
-    ggml_expert_cache_key key{tensor_ptr, expert_idx};
+    // Avoid heap churn in the token-hot path. Qwen/Mixtral MoE tensors are well below this.
+    constexpr int max_stack_experts = 512;
+    int hit_slots_stack[max_stack_experts];
+    std::vector<int> hit_slots_heap;
+    int * hit_slots = hit_slots_stack;
+    if (n_expert > max_stack_experts) {
+        hit_slots_heap.resize((size_t) n_expert);
+        hit_slots = hit_slots_heap.data();
+    }
 
-    // ── Cache hit ───────────────────────────────────────────────────────
-    auto it = cache->slot_map.find(key);
-    if (it != cache->slot_map.end()) {
-        int idx = it->second;
+    // preflight: only take the D2D path when all required experts are present
+    int64_t n_hits = 0;
+    for (int64_t id = 0; id < n_expert; ++id) {
+        if (!ggml_bitset_get(used, id)) {
+            continue;
+        }
+
+        ggml_expert_cache_key key{key_base, id};
+        auto it = cache->slot_map.find(key);
+        if (it == cache->slot_map.end()) {
+            cache->misses++;
+            return false;
+        }
+
+        hit_slots[n_hits++] = it->second;
+    }
+
+    int64_t hit_i = 0;
+    int64_t run_first_id = -1;
+    int64_t run_last_id = -1;
+    int run_first_slot = -1;
+    int run_last_slot = -1;
+
+    auto flush_run = [&]() {
+        if (run_first_id < 0) {
+            return;
+        }
+        const size_t run_experts = (size_t) (run_last_id - run_first_id + 1);
+        const size_t run_bytes = run_experts * expert_size;
+        CUDA_CHECK(cudaMemcpyAsync(
+            (char *) dst_data + run_first_id * (int64_t) expert_size,
+            cache->slots[run_first_slot].data,
+            run_bytes,
+            cudaMemcpyDeviceToDevice,
+            stream));
+        cache->d2d_copies += 1;
+        cache->d2d_bytes  += (int64_t) run_bytes;
+        cache->skipped_h2d_due_to_hit += (int64_t) run_experts;
+        run_first_id = -1;
+        run_last_id = -1;
+        run_first_slot = -1;
+        run_last_slot = -1;
+    };
+
+    for (int64_t id = 0; id < n_expert; ++id) {
+        if (!ggml_bitset_get(used, id)) {
+            continue;
+        }
+
+        const int idx = hit_slots[hit_i++];
         cache->hits++;
 
-        // promote to MRU
+        // LRU promotion is useful under pressure, but it is pure CPU overhead for the
+        // Tier-1 steady-state cache where all offloaded expert tensors fit. Keep exact
+        // LRU behavior for small caches and avoid thousands of linked-list mutations
+        // per 128-token run for large caches.
+        if (cache->n_slots < 4096) {
+            lru_unlink(cache, idx);
+            lru_push_front(cache, idx);
+        }
+
+        if (run_first_id >= 0 && id == run_last_id + 1 && idx == run_last_slot + 1) {
+            run_last_id = id;
+            run_last_slot = idx;
+            continue;
+        }
+
+        flush_run();
+        run_first_id = id;
+        run_last_id = id;
+        run_first_slot = idx;
+        run_last_slot = idx;
+    }
+
+    flush_run();
+    return true;
+}
+
+
+void * ggml_expert_cache_get(
+        ggml_expert_cache *               cache,
+        const ggml_expert_cache_key_base & key_base,
+        int64_t                           expert_idx,
+        const void *                      src_data,
+        size_t                            expert_size,
+        cudaStream_t                      stream,
+        bool *                            was_hit,
+        bool                              count_h2d) {
+    GGML_ASSERT(cache != nullptr);
+    GGML_ASSERT(expert_size <= cache->slot_size);
+
+    std::lock_guard<std::mutex> lock(cache->mtx);
+
+    ggml_expert_cache_key key{key_base, expert_idx};
+
+    auto it = cache->slot_map.find(key);
+    if (it != cache->slot_map.end()) {
+        const int idx = it->second;
+        cache->hits++;
+        if (was_hit) {
+            *was_hit = true;
+        }
+
         lru_unlink(cache, idx);
         lru_push_front(cache, idx);
 
         return cache->slots[idx].data;
     }
 
-    // ── Cache miss — evict LRU tail ─────────────────────────────────────
     cache->misses++;
+    if (was_hit) {
+        *was_hit = false;
+    }
 
-    int victim = cache->lru_tail;
+    int victim = -1;
+    while (cache->next_free_slot < cache->n_slots) {
+        const int candidate = cache->next_free_slot++;
+        if (!cache->slots[candidate].occupied) {
+            victim = candidate;
+            break;
+        }
+    }
+    if (victim < 0) {
+        victim = cache->lru_tail;
+    }
     GGML_ASSERT(victim >= 0);
 
     ggml_expert_cache_slot & slot = cache->slots[victim];
 
-    // remove old mapping if slot was occupied
-    if (slot.tensor_ptr != nullptr) {
-        ggml_expert_cache_key old_key{slot.tensor_ptr, slot.expert_idx};
-        cache->slot_map.erase(old_key);
+    if (slot.occupied) {
+        cache->slot_map.erase(slot.key);
     }
 
-    // unlink victim from LRU tail, push to front
     lru_unlink(cache, victim);
     lru_push_front(cache, victim);
 
-    // copy expert data from CPU to GPU
     CUDA_CHECK(cudaMemcpyAsync(slot.data, src_data, expert_size, cudaMemcpyDefault, stream));
+    if (count_h2d) {
+        cache->h2d_copies += 1;
+        cache->h2d_bytes  += (int64_t) expert_size;
+    } else {
+        cache->d2d_copies += 1;
+        cache->d2d_bytes  += (int64_t) expert_size;
+    }
 
-    // update slot metadata
-    slot.tensor_ptr = tensor_ptr;
-    slot.expert_idx = expert_idx;
-    slot.size       = expert_size;
+    slot.key        = key;
+    slot.occupied   = true;
+    slot.tensor_ptr       = (void *) key_base.source_tensor_id;
+    slot.expert_idx       = expert_idx;
+    slot.size             = expert_size;
 
-    // insert new mapping
     cache->slot_map[key] = victim;
 
     return slot.data;
