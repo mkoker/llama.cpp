@@ -70,6 +70,7 @@ ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_
     cache->device     = device;
     cache->lru_head   = 0;
     cache->lru_tail   = n_slots - 1;
+    cache->next_free_slot = 0;
     cache->hits       = 0;
     cache->misses     = 0;
     cache->h2d_copies = 0;
@@ -192,6 +193,32 @@ bool ggml_expert_cache_copy_hits(
     }
 
     int64_t hit_i = 0;
+    int64_t run_first_id = -1;
+    int64_t run_last_id = -1;
+    int run_first_slot = -1;
+    int run_last_slot = -1;
+
+    auto flush_run = [&]() {
+        if (run_first_id < 0) {
+            return;
+        }
+        const size_t run_experts = (size_t) (run_last_id - run_first_id + 1);
+        const size_t run_bytes = run_experts * expert_size;
+        CUDA_CHECK(cudaMemcpyAsync(
+            (char *) dst_data + run_first_id * (int64_t) expert_size,
+            cache->slots[run_first_slot].data,
+            run_bytes,
+            cudaMemcpyDeviceToDevice,
+            stream));
+        cache->d2d_copies += 1;
+        cache->d2d_bytes  += (int64_t) run_bytes;
+        cache->skipped_h2d_due_to_hit += (int64_t) run_experts;
+        run_first_id = -1;
+        run_last_id = -1;
+        run_first_slot = -1;
+        run_last_slot = -1;
+    };
+
     for (int64_t id = 0; id < n_expert; ++id) {
         if (!ggml_bitset_get(used, id)) {
             continue;
@@ -209,17 +236,20 @@ bool ggml_expert_cache_copy_hits(
             lru_push_front(cache, idx);
         }
 
-        CUDA_CHECK(cudaMemcpyAsync(
-            (char *) dst_data + id * (int64_t) expert_size,
-            cache->slots[idx].data,
-            expert_size,
-            cudaMemcpyDeviceToDevice,
-            stream));
-        cache->d2d_copies += 1;
-        cache->d2d_bytes  += (int64_t) expert_size;
-        cache->skipped_h2d_due_to_hit += 1;
+        if (run_first_id >= 0 && id == run_last_id + 1 && idx == run_last_slot + 1) {
+            run_last_id = id;
+            run_last_slot = idx;
+            continue;
+        }
+
+        flush_run();
+        run_first_id = id;
+        run_last_id = id;
+        run_first_slot = idx;
+        run_last_slot = idx;
     }
 
+    flush_run();
     return true;
 }
 
@@ -259,7 +289,17 @@ void * ggml_expert_cache_get(
         *was_hit = false;
     }
 
-    const int victim = cache->lru_tail;
+    int victim = -1;
+    while (cache->next_free_slot < cache->n_slots) {
+        const int candidate = cache->next_free_slot++;
+        if (!cache->slots[candidate].occupied) {
+            victim = candidate;
+            break;
+        }
+    }
+    if (victim < 0) {
+        victim = cache->lru_tail;
+    }
     GGML_ASSERT(victim >= 0);
 
     ggml_expert_cache_slot & slot = cache->slots[victim];

@@ -50,3 +50,24 @@ The verbose counter run is 31.9% below the full-GPU baseline and recovers 52.6% 
 | 24576 | 29.84 | 0 |
 
 Observation: 4096-16384 MiB are effectively flat at ~63.3-63.6 t/s in single-run sweep data, so the current Tier 1 bottleneck is not simple capacity once the cache is large enough. The counters show only 2.2 GiB of real H2D traffic remains and ~20.7 GiB of H2D is skipped, while every selected expert still incurs a D2D materialization copy (~22.7 GiB total). Next optimization work should target avoidable scheduler/cache bookkeeping and D2D materialization path overhead, not larger cache sizes.
+
+## 2026-06-24 refinement update
+
+Commit/build: `a692aff-dirty (571)` before commit.
+
+Minimal optimization tested: first-fill cache slots now allocate monotonically so a full-tensor warm fill stores expert 0..N in contiguous slot order; cache-hit materialization coalesces adjacent selected expert IDs when their cache slots are also adjacent. This directly targets D2D launch overhead without changing the scheduler contract or MUL_MAT_ID kernels.
+
+Locked rerun artifacts:
+
+| run | tg128 t/s | log |
+| --- | ---: | --- |
+| coalesced cache-on triplet | 74.07 ± 0.03 | `logs/expert-cache/next/tier1-coalesced-cacheon.out` |
+| coalesced verbose counter | 72.97 | `logs/expert-cache/next/tier1-coalesced-counter-run-verbose.out` |
+
+Coalesced verbose final counters:
+
+```text
+ggml_expert_cache_free: expert cache stats (device 0) - hits: 24768, misses: 3096, hit rate: 88.9%, h2d copies: 3072, h2d bytes: 3029336064, d2d copies: 23442, d2d bytes: 24424022016, skipped h2d: 24744
+```
+
+Interpretation: the optimization improved the r3 cache-on headline from `72.19 ± 7.51` to `74.07 ± 0.03`, but it did not close the target gap (`82.8 tok/s`). D2D bytes stayed fixed at `24,424,022,016`; D2D copy calls fell only `24,768 -> 23,442` because Qwen3-30B selected expert IDs are mostly sparse rather than adjacent. The remaining Tier 1 gap is therefore dominated by the existing design requirement to materialize selected experts into the MUL_MAT_ID input tensor and by per-token scheduler/cache bookkeeping. Avoiding it requires a larger design change: teach MUL_MAT_ID to consume cached expert slots directly or batch/gather sparse expert copies in a backend kernel, rather than issuing one scheduler-side D2D materialization per selected expert slice.

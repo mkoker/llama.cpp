@@ -73,6 +73,7 @@ struct ggml_expert_cache {
 
     int lru_head; // most recently used
     int lru_tail; // least recently used (eviction candidate)
+    int next_free_slot; // monotonic first-fill cursor to keep initial expert tensors contiguous
 
     std::unordered_map<ggml_expert_cache_key, int, ggml_expert_cache_key_hash> slot_map;
 
