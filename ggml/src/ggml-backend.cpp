@@ -12,6 +12,7 @@
 #include "ggml-backend-impl.h"
 #include "ggml-alloc.h"
 #include "ggml-impl.h"
+#include "ggml-expert-cache-key.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -881,6 +882,32 @@ static char causes[GGML_DEFAULT_GRAPH_SIZE*16 + GGML_SCHED_MAX_SPLITS_DEBUG*GGML
 #define GET_CAUSE(node) ""
 #endif
 
+
+static bool ggml_backend_sched_buffer_is_host(ggml_backend_buffer_t buffer) {
+    if (buffer == nullptr) {
+        return false;
+    }
+    if (ggml_backend_buffer_is_host(buffer)) {
+        return true;
+    }
+    const char * buft_name = buffer->buft ? ggml_backend_buft_name(buffer->buft) : nullptr;
+    return buft_name != nullptr && strstr(buft_name, "Host") != nullptr;
+}
+
+static bool ggml_backend_sched_is_host_moe_expert_src(
+        const ggml_tensor * op,
+        const ggml_tensor * src,
+        int src_index) {
+    return op != nullptr &&
+        src != nullptr &&
+        op->op == GGML_OP_MUL_MAT_ID &&
+        src_index == 0 &&
+        src->buffer != nullptr &&
+        src->ne[2] > 0 &&
+        op->src[2] != nullptr &&
+        ggml_backend_sched_buffer_is_host(src->buffer);
+}
+
 // returns the backend that should be used for the node based on the current locations
 static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, struct ggml_tensor * tensor) {
     // assign pre-allocated nodes to their backend
@@ -920,12 +947,16 @@ static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, st
         }
         // skip ROPE since the rope freqs tensor is too small to choose a backend based on it
         // not an ideal solution
-        if (tensor->op != GGML_OP_ROPE && src->buffer != NULL && ((src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS || (tensor->op == GGML_OP_MUL_MAT_ID && i == 0 && (ggml_backend_buffer_is_host(src->buffer) || strstr(ggml_backend_buft_name(src->buffer->buft), "Host")))) || (tensor->op == GGML_OP_MUL_MAT_ID && i == 0 && ((ggml_backend_buffer_is_host(src->buffer) || strstr(ggml_backend_buft_name(src->buffer->buft), "Host")) || strstr(ggml_backend_buft_name(src->buffer->buft), "Host"))))) {
+        const bool weight_like = src->buffer != NULL && (src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS ||
+            ggml_backend_sched_is_host_moe_expert_src(tensor, src, i));
+        if (tensor->op != GGML_OP_ROPE && weight_like) {
             int src_backend_id = ggml_backend_sched_backend_from_buffer(sched, src, tensor);
             // check if a backend with higher prio wants to offload the op
-            if (sched->op_offload && src_backend_id == sched->n_backends - 1 && (ggml_backend_buffer_is_host(src->buffer) || strstr(ggml_backend_buft_name(src->buffer->buft), "Host"))) {
+            if (sched->op_offload && src_backend_id == sched->n_backends - 1 &&
+                    (ggml_backend_sched_buffer_is_host(src->buffer) || ggml_backend_sched_is_host_moe_expert_src(tensor, src, i))) {
                 for (int b = 0; b < src_backend_id; b++) {
-                    if (ggml_backend_supports_op(sched->backends[b], tensor) && (tensor->op == GGML_OP_MUL_MAT_ID || (tensor->op == GGML_OP_MUL_MAT_ID || ggml_backend_offload_op(sched->backends[b], tensor)))) {
+                    if (ggml_backend_supports_op(sched->backends[b], tensor) &&
+                            (ggml_backend_sched_is_host_moe_expert_src(tensor, src, i) || ggml_backend_offload_op(sched->backends[b], tensor))) {
                         SET_CAUSE(tensor, "1.off");
                         return b;
                     }
@@ -1544,24 +1575,6 @@ static bool ggml_backend_sched_alloc_splits(ggml_backend_sched_t sched) {
 }
 
 
-static constexpr uint32_t GGML_SCHED_EXPERT_CACHE_KEY_VERSION = 1;
-
-// Scheduler boundary cache key fields (must stay ABI-compatible with ggml-cuda/expert-cache.cuh):
-// - source_tensor_id: canonical root tensor pointer (view chain collapsed)
-// - backend_id: scheduler split backend route
-// - type + ne[] + nb[]: dtype and full shape/stride layout
-// - expert_size: bytes per expert slice
-struct ggml_sched_expert_cache_key_base {
-    uint32_t version;
-    uint32_t reserved;
-    uintptr_t source_tensor_id;
-    uint32_t backend_id;
-    uint32_t type;
-    uint64_t ne[4];
-    uint64_t nb[4];
-    uint64_t expert_size;
-};
-
 static uint64_t ggml_sched_expert_cache_source_tensor_id(const ggml_tensor * tensor) {
     GGML_ASSERT(tensor != nullptr);
     const ggml_tensor * base = tensor;
@@ -1578,31 +1591,31 @@ static uint64_t ggml_sched_expert_cache_source_tensor_id(const ggml_tensor * ten
     return (uint64_t) (uintptr_t) base;
 }
 
-static ggml_sched_expert_cache_key_base ggml_sched_expert_cache_make_key_base(
+static bool ggml_sched_expert_cache_make_key_base(
     const ggml_tensor * input,
     const ggml_tensor * input_cpy,
     int split_backend_id,
-    size_t expert_size) {
+    size_t expert_size,
+    ggml_expert_cache_key_base * key_base) {
 
-    GGML_ASSERT(input != nullptr);
-    GGML_ASSERT(input_cpy != nullptr);
-    GGML_ASSERT(split_backend_id >= 0);
-    GGML_ASSERT(input->ne[2] > 0);
-    GGML_ASSERT(expert_size > 0);
+    if (input == nullptr || input_cpy == nullptr || key_base == nullptr || split_backend_id < 0 ||
+            input->ne[2] <= 0 || expert_size == 0) {
+        return false;
+    }
 
-    // unsupported layout guardrails: expert slices must be stable/contiguous for deterministic keys
-    GGML_ASSERT(ggml_is_contiguous_2(input));
-    GGML_ASSERT(ggml_is_contiguous_2(input_cpy));
-    GGML_ASSERT((size_t) input->nb[2] == expert_size);
-    GGML_ASSERT((size_t) input_cpy->nb[2] == expert_size);
-    GGML_ASSERT(input->type == input_cpy->type);
-    GGML_ASSERT(input->ne[0] == input_cpy->ne[0]);
-    GGML_ASSERT(input->ne[1] == input_cpy->ne[1]);
-    GGML_ASSERT(input->ne[2] == input_cpy->ne[2]);
-    GGML_ASSERT(input->ne[3] == input_cpy->ne[3]);
+    // Unsupported layouts use the original selective H2D copy path. Cache slots are keyed and copied
+    // at exactly one contiguous expert stride, so non-contiguous or shape-mismatched tensors must not
+    // enter the persistent cache.
+    if (!ggml_is_contiguous_2(input) || !ggml_is_contiguous_2(input_cpy) ||
+            (size_t) input->nb[2] != expert_size || (size_t) input_cpy->nb[2] != expert_size ||
+            input->type != input_cpy->type ||
+            input->ne[0] != input_cpy->ne[0] || input->ne[1] != input_cpy->ne[1] ||
+            input->ne[2] != input_cpy->ne[2] || input->ne[3] != input_cpy->ne[3]) {
+        return false;
+    }
 
-    ggml_sched_expert_cache_key_base key_base = {
-        GGML_SCHED_EXPERT_CACHE_KEY_VERSION,
+    *key_base = {
+        GGML_EXPERT_CACHE_KEY_VERSION,
         0,
         (uintptr_t) ggml_sched_expert_cache_source_tensor_id(input),
         (uint32_t) split_backend_id,
@@ -1612,7 +1625,7 @@ static ggml_sched_expert_cache_key_base ggml_sched_expert_cache_make_key_base(
         (uint64_t) expert_size,
     };
 
-    return key_base;
+    return true;
 }
 
 static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t sched) {
@@ -1708,11 +1721,12 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                     ggml_backend_sched_expert_cache_insert_fn_t cache_insert_fn = sched->expert_cache_insert_fns[split_backend_id];
 
                     bool cache_handled = false;
-                    ggml_sched_expert_cache_key_base key_base;
+                    ggml_expert_cache_key_base key_base;
+                    bool cache_key_valid = false;
                     const bool cache_available = cache_copy_fn || cache_insert_fn;
                     if (cache_available) {
-                        key_base = ggml_sched_expert_cache_make_key_base(input, input_cpy, split_backend_id, expert_size);
-                        if (cache_copy_fn) {
+                        cache_key_valid = ggml_sched_expert_cache_make_key_base(input, input_cpy, split_backend_id, expert_size, &key_base);
+                        if (cache_key_valid && cache_copy_fn) {
                             cache_handled = cache_copy_fn(split_backend, input_cpy, input->data, n_expert, expert_size, used_ids.data(), used_ids.size(), (const void *) &key_base, sizeof(key_base));
                         }
                     }
@@ -1755,7 +1769,7 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                         }
                         copy_experts(first_id, last_id);
 
-                        if (cache_insert_fn) {
+                        if (cache_key_valid && cache_insert_fn) {
                             cache_insert_fn(split_backend, input_cpy, n_expert, expert_size, used_ids.data(), used_ids.size(), (const void *) &key_base, sizeof(key_base));
                         }
                     }

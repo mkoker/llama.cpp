@@ -77,31 +77,12 @@ ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_
     cache->d2d_copies = 0;
     cache->d2d_bytes  = 0;
     cache->skipped_h2d_due_to_hit = 0;
-    cache->staging_buf  = nullptr;
-    cache->staging_size = 0;
-
-    // allocate staging from cache budget: staging = slot_size * 128 (one full expert tensor)
-    size_t staging_want = slot_size_bytes * 128;
-    if (staging_want > pool_bytes / 3) staging_want = pool_bytes / 3; // cap at 1/3 of budget
-    {
-        cudaError_t se = cudaMalloc(&cache->staging_buf, staging_want);
-        if (se == cudaSuccess) {
-            cache->staging_size = staging_want;
-        } else {
-            cudaGetLastError();
-            cache->staging_buf = nullptr;
-            cache->staging_size = 0;
-        }
-    }
-
-
     cache->slots = new ggml_expert_cache_slot[n_slots];
 
     for (int i = 0; i < n_slots; i++) {
         cache->slots[i].data       = (char *)pool + (size_t)i * slot_size_bytes;
         cache->slots[i].occupied         = false;
         cache->slots[i].tensor_ptr       = nullptr;
-        cache->slots[i].materialized_dst = nullptr;
         cache->slots[i].expert_idx       = -1;
         cache->slots[i].size       = 0;
         cache->slots[i].prev       = i - 1;
@@ -130,7 +111,6 @@ void ggml_expert_cache_free(ggml_expert_cache * cache) {
                   cache->d2d_copies, cache->d2d_bytes,
                   cache->skipped_h2d_due_to_hit);
 
-    if (cache->staging_buf) { CUDA_CHECK(cudaFree(cache->staging_buf)); }
     CUDA_CHECK(cudaFree(cache->pool));
     delete[] cache->slots;
     delete cache;
@@ -229,17 +209,14 @@ bool ggml_expert_cache_copy_hits(
             lru_push_front(cache, idx);
         }
 
-        if (cache->slots[idx].materialized_dst != dst_data) {
-            CUDA_CHECK(cudaMemcpyAsync(
-                (char *) dst_data + id * (int64_t) expert_size,
-                cache->slots[idx].data,
-                expert_size,
-                cudaMemcpyDeviceToDevice,
-                stream));
-            cache->slots[idx].materialized_dst = dst_data;
-            cache->d2d_copies += 1;
-            cache->d2d_bytes  += (int64_t) expert_size;
-        }
+        CUDA_CHECK(cudaMemcpyAsync(
+            (char *) dst_data + id * (int64_t) expert_size,
+            cache->slots[idx].data,
+            expert_size,
+            cudaMemcpyDeviceToDevice,
+            stream));
+        cache->d2d_copies += 1;
+        cache->d2d_bytes  += (int64_t) expert_size;
         cache->skipped_h2d_due_to_hit += 1;
     }
 
@@ -306,7 +283,6 @@ void * ggml_expert_cache_get(
     slot.key        = key;
     slot.occupied   = true;
     slot.tensor_ptr       = (void *) key_base.source_tensor_id;
-    slot.materialized_dst = nullptr;
     slot.expert_idx       = expert_idx;
     slot.size             = expert_size;
 
@@ -314,21 +290,3 @@ void * ggml_expert_cache_get(
 
     return slot.data;
 }
-
-void ggml_expert_cache_mark_materialized(
-        ggml_expert_cache *               cache,
-        const ggml_expert_cache_key_base & key_base,
-        int64_t                           expert_idx,
-        void *                            dst_data) {
-    GGML_ASSERT(cache != nullptr);
-
-    std::lock_guard<std::mutex> lock(cache->mtx);
-
-    ggml_expert_cache_key key{key_base, expert_idx};
-    auto it = cache->slot_map.find(key);
-    if (it != cache->slot_map.end()) {
-        cache->slots[it->second].materialized_dst = dst_data;
-    }
-}
-
-

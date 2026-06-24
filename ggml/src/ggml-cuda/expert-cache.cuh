@@ -1,25 +1,10 @@
 #pragma once
 
 #include "common.cuh"
+#include "../ggml-expert-cache-key.h"
 #include <cstdint>
 #include <unordered_map>
 #include <mutex>
-
-// Scheduler-derived cache-key context (deterministic across lookup/insert):
-// - source_tensor_id: source tensor identity at scheduler boundary (canonical base tensor)
-// - backend_id: scheduler split backend id / device route
-// - type + ne[] + nb[]: dtype and full layout shape/strides
-// - expert_size: bytes per expert slice
-struct ggml_expert_cache_key_base {
-    uint32_t  version;          // key schema version for scheduler<->backend ABI safety
-    uint32_t  reserved;         // reserved for future flags
-    uintptr_t source_tensor_id;
-    uint32_t  backend_id;
-    uint32_t  type;
-    uint64_t  ne[4];
-    uint64_t  nb[4];
-    uint64_t  expert_size;
-};
 
 struct ggml_expert_cache_key {
     ggml_expert_cache_key_base base;
@@ -70,7 +55,6 @@ struct ggml_expert_cache_slot {
     ggml_expert_cache_key key;        // cache key currently occupying this slot
     bool                  occupied;   // false = empty slot
     void *                tensor_ptr;       // retained for diagnostics / legacy stats
-    void *                materialized_dst; // dst tensor base already populated from this cache slot
     int64_t               expert_idx;       // which expert index within that tensor
     size_t                size;       // actual bytes used in this slot (may be < slot_size)
 
@@ -102,8 +86,6 @@ struct ggml_expert_cache {
     int64_t d2d_bytes;
     int64_t skipped_h2d_due_to_hit;
 
-    void *  staging_buf;
-    size_t  staging_size;
 };
 
 ggml_expert_cache * ggml_expert_cache_init(size_t total_size_bytes, size_t slot_size_bytes, int device);
@@ -133,9 +115,3 @@ void * ggml_expert_cache_get(
     cudaStream_t                      stream,
     bool *                            was_hit = nullptr,
     bool                              count_h2d = true);
-
-void ggml_expert_cache_mark_materialized(
-    ggml_expert_cache *               cache,
-    const ggml_expert_cache_key_base & key_base,
-    int64_t                           expert_idx,
-    void *                            dst_data);

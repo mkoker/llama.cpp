@@ -659,27 +659,6 @@ void ggml_backend_cuda_set_expert_cache(ggml_backend_t backend, size_t size_mib,
     }
 }
 
-void ggml_backend_cuda_alloc_expert_staging(ggml_backend_t backend, size_t size_bytes) {
-    ggml_backend_cuda_context * ctx = (ggml_backend_cuda_context *)backend->context;
-    if (!ctx->expert_cache || ctx->expert_cache->staging_buf) return;
-    ggml_cuda_set_device(ctx->device);
-    size_t free_mem = 0, total_mem = 0;
-    cudaMemGetInfo(&free_mem, &total_mem);
-    if (free_mem < size_bytes + 256*1024*1024) {
-        size_bytes = free_mem > 256*1024*1024 ? free_mem - 256*1024*1024 : 0;
-    }
-    if (size_bytes == 0) return;
-    cudaError_t err = cudaMalloc(&ctx->expert_cache->staging_buf, size_bytes);
-    if (err == cudaSuccess) {
-        ctx->expert_cache->staging_size = size_bytes;
-        GGML_LOG_INFO("expert-cache: staging buffer %.0f MiB\n", size_bytes/(1024.0*1024.0));
-    } else {
-        cudaGetLastError();
-        GGML_LOG_WARN("expert-cache: staging alloc failed (%.0f MiB, %.0f MiB free)\n", size_bytes/(1024.0*1024.0), free_mem/(1024.0*1024.0));
-    }
-}
-
-
 // Copy expert slices via persistent cache.
 // On hit: D2D from cache slot to destination.
 // On miss: one-time H2D into cache slot, then D2D to destination.
@@ -702,6 +681,34 @@ static bool ggml_backend_cuda_expert_cache_copy(
     const ggml_expert_cache_key_base * key_base = (const ggml_expert_cache_key_base *) key_base_data;
     cudaStream_t stream = ctx->stream();
 
+    auto copy_padding = [&]() {
+        int64_t id = 0;
+        while (id < n_expert) {
+            while (id < n_expert && !ggml_bitset_get(used, id)) {
+                ++id;
+            }
+            if (id >= n_expert) {
+                break;
+            }
+            int64_t last_id = id;
+            while (last_id + 1 < n_expert && ggml_bitset_get(used, last_id + 1)) {
+                ++last_id;
+            }
+            const size_t padding = std::min<size_t>(expert_size, 512);
+            const size_t padding_end = last_id < n_expert - 1 ? padding : 0;
+            if (padding_end > 0) {
+                const size_t offset = (size_t) (last_id + 1) * expert_size;
+                CUDA_CHECK(cudaMemcpyAsync(
+                    (uint8_t *) input_cpy->data + offset,
+                    (const uint8_t *) input_data + offset,
+                    padding_end,
+                    cudaMemcpyHostToDevice,
+                    stream));
+            }
+            id = last_id + 1;
+        }
+    };
+
     if (ggml_expert_cache_copy_hits(
             ctx->expert_cache,
             *key_base,
@@ -710,6 +717,7 @@ static bool ggml_backend_cuda_expert_cache_copy(
             expert_size,
             used,
             stream)) {
+        copy_padding();
         return true;
     }
 
@@ -756,7 +764,6 @@ static bool ggml_backend_cuda_expert_cache_copy(
                     expert_size,
                     cudaMemcpyDeviceToDevice,
                     stream));
-                ggml_expert_cache_mark_materialized(ctx->expert_cache, *key_base, pre_id, input_cpy->data);
             }
         }
 
@@ -766,8 +773,6 @@ static bool ggml_backend_cuda_expert_cache_copy(
             expert_size,
             cudaMemcpyDeviceToDevice,
             stream));
-        ggml_expert_cache_mark_materialized(ctx->expert_cache, *key_base, id, input_cpy->data);
-
         ctx->expert_cache->d2d_copies += 1;
         ctx->expert_cache->d2d_bytes  += (int64_t) expert_size;
         if (was_hit) {
@@ -775,6 +780,7 @@ static bool ggml_backend_cuda_expert_cache_copy(
         }
     }
 
+    copy_padding();
     return true;
 }
 
@@ -2619,61 +2625,9 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
 
     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
 
-    // Expert cache: if src0 is on host memory, build GPU copy via staging buffer
-    ggml_tensor src0_cached;
-    ggml_tensor * src0_orig = dst->src[0];
-    if (ctx.expert_cache && ctx.expert_cache->staging_buf && src0->buffer &&
-        (ggml_backend_buft_is_host(src0->buffer->buft) || strstr(ggml_backend_buft_name(src0->buffer->buft), "Host"))) {
-
-        size_t src0_total = ggml_nbytes(src0);
-        if (src0_total <= ctx.expert_cache->staging_size) {
-            cudaStream_t cache_stream = ctx.stream();
-
-            std::vector<char> ids_host_cache(ggml_nbytes(ids));
-            CUDA_CHECK(cudaMemcpyAsync(ids_host_cache.data(), ids->data, ggml_nbytes(ids),
-                cudaMemcpyDeviceToHost, cache_stream));
-            CUDA_CHECK(cudaStreamSynchronize(cache_stream));
-
-            std::vector<bool> expert_needed(ne02, false);
-            for (int64_t t = 0; t < ids->ne[1]; t++) {
-                for (int64_t e = 0; e < ids->ne[0]; e++) {
-                    int32_t eid = *(const int32_t *)(ids_host_cache.data() + t * ids->nb[1] + e * ids->nb[0]);
-                    if (eid >= 0 && eid < ne02) expert_needed[eid] = true;
-                }
-            }
-
-            const ggml_expert_cache_key_base key_base = {
-                1u,
-                0u,
-                (uintptr_t) src0_orig,
-                (uint32_t) ctx.device,
-                (uint32_t) src0->type,
-                {(uint64_t) src0->ne[0], (uint64_t) src0->ne[1], (uint64_t) src0->ne[2], (uint64_t) src0->ne[3]},
-                {(uint64_t) src0->nb[0], (uint64_t) src0->nb[1], (uint64_t) src0->nb[2], (uint64_t) src0->nb[3]},
-                (uint64_t) nb02,
-            };
-
-            for (int64_t eid = 0; eid < ne02; eid++) {
-                if (!expert_needed[eid]) continue;
-                const void * cpu_ptr = (const char *)src0->data + eid * nb02;
-                void * cached = ggml_expert_cache_get(
-                    ctx.expert_cache, key_base, eid, cpu_ptr, nb02, cache_stream, nullptr);
-                CUDA_CHECK(cudaMemcpyAsync(
-                    (char *)ctx.expert_cache->staging_buf + eid * nb02,
-                    cached, nb02,
-                    cudaMemcpyDefault, cache_stream));
-            }
-
-            src0_cached = *src0;
-            CUDA_CHECK(cudaStreamSynchronize(cache_stream));
-            src0_cached.data = ctx.expert_cache->staging_buf;
-            src0_cached.buffer = dst->buffer;
-            dst->src[0] = &src0_cached;
-            src0 = &src0_cached;
-        }
-    }
-
-
+    // Expert cache ownership lives at the scheduler copy boundary. Do not build a
+    // second MUL_MAT_ID-local staging cache here: it would use a different key identity
+    // and produce divergent counters/eviction behavior.
     // [TAG_MUL_MAT_ID_CUDA_GRAPHS]
     if (src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
         static_assert(MMVQ_MAX_BATCH_SIZE == MMVF_MAX_BATCH_SIZE);
@@ -2818,8 +2772,6 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
         ne_get_rows, 1, 1, sizeof(int32_t), ne_get_rows*sizeof(int32_t), ne_get_rows*sizeof(int32_t),
         nb1, nb2, nb3, stream);
 
-    // restore original src0
-    dst->src[0] = src0_orig;
 }
 
 static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct ggml_tensor * dst) {
@@ -5518,9 +5470,6 @@ static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, con
     }
     if (strcmp(name, "ggml_backend_cuda_expert_cache_insert") == 0) {
         return (void *)ggml_backend_cuda_expert_cache_insert;
-    }
-    if (strcmp(name, "ggml_backend_cuda_alloc_expert_staging") == 0) {
-        return (void *)ggml_backend_cuda_alloc_expert_staging;
     }
     return nullptr;
 }

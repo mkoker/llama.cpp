@@ -54,6 +54,16 @@ Key changes:
 
 The expensive path is not generic tensor copy. It is the scheduler's CPU-offloaded MoE expert slice movement created by `-ncmoe`. Placing the glue there keeps the blast radius small, avoids changing dense/non-MoE copy paths, and lets the cache key use the scheduler's tensor/backend context directly.
 
+## Correctness hardening status
+
+- Scheduler guard: the broad duplicated `MUL_MAT_ID` host-buffer condition is now a named predicate limited to host-backed MoE expert `src[0]` tensors.
+- Cache ownership: scheduler-side copy/insert is the only active expert-cache materialization path. The former `ggml_cuda_mul_mat_id()` staging-cache path and staging allocation proc were removed to avoid divergent keys/counters.
+- Unsupported layouts: scheduler cache-key creation now returns false for non-contiguous, stride-mismatched, or shape/type-mismatched tensors; those cases fall back to the original selective H2D path instead of hard asserting.
+- ABI protection: scheduler and CUDA/HIP code share `ggml/src/ggml-expert-cache-key.h`, with static offset and size checks for `ggml_expert_cache_key_base`.
+- Padding semantics: cache copy now preserves the original selective-copy trailing padding (`min(expert_size, 512)` after each selected contiguous run unless the run reaches the final expert).
+- Destination lifetime: the unproven `materialized_dst` skip optimization was removed; D2D materialization is performed every cache hit.
+- Verification after this pass: `cmake --build build-hip-rex -j2` passed, then focused CTest regex `(test-backend-ops|test-arg-parser|test-llama-archs|test-chat|test-jinja|test-gguf|test-quantize-fns)` passed 11/11 in 260.61 sec.
+
 ## Benchmark and validation results
 
 All GPU benchmark runs used VM100's bench-lock protocol. Latest rerun numbers below use the artifact paths listed in the Result column.
